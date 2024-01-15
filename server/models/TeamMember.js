@@ -62,45 +62,155 @@ TeamMemberSchema.index({ workSchedule: 1 });
 TeamMemberSchema.index({ 'dailyTotals.date': 1 });
 TeamMemberSchema.index({ 'weeklyTotals.weekStart': 1 });
 
-TeamMemberSchema.pre('save', function (next) {
-	if (this.teamMemberFirstName && this.isModified('teamMemberFirstName')) {
-		this.teamMemberFirstName = this.teamMemberFirstName.charAt(0).toUpperCase() + this.teamMemberFirstName.slice(1);
+TeamMemberSchema.methods.addWorkDate = async function(workDate) {
+	// Parse the workDate and get the month
+	const date = parseISO(workDate);
+	const month = getMonth(date);
+
+	// Find the work schedule for the month
+	let workSchedule = this.workSchedule.find((schedule) => schedule.month === month);
+
+	// If no work schedule exists for the month, create a new one
+	if (!workSchedule) {
+		workSchedule = { month, dates: [] };
+		this.workSchedule.push(workSchedule);
 	}
-	if (this.teamMemberLastName && this.isModified('teamMemberLastName')) {
-		this.teamMemberLastName = this.teamMemberLastName.charAt(0).toUpperCase() + this.teamMemberLastName.slice(1);
+
+	// Check if the dates array already contains the new workDate
+	const hasDate = workSchedule.dates.some((existingDate) => isEqual(existingDate, date));
+
+	// If the dates array does not contain the new workDate, add it
+	if (!hasDate) {
+		workSchedule.dates.push(date);
 	}
-	next();
-});
 
-TeamMemberSchema.methods.addWorkDate = function (date) {
-    const month = date.getMonth();
-    let monthSchedule = this.workSchedule.find(schedule => schedule.month === month);
+	await this.save();
 
-    if (!monthSchedule) {
-        monthSchedule = { month, dates: [] };
-        this.workSchedule.push(monthSchedule);
-    }
+	// If the team member is a host
+	if (this.position === 'host') {
+		// Find all servers who worked on the same date
+		const servers = await this.model('TeamMember').find({
+			position: 'server',
+			workSchedule: {
+				$elemMatch: {
+					month,
+					dates: {
+						$elemMatch: {
+							$eq: date,
+						},
+					},
+				},
+			},
+		});
 
-    monthSchedule.dates.push(date);
+		// Update the hostTipOuts field for each server and the tipsReceived field for the host
+		for (const server of servers) {
+			const tipOut = server.foodSales * 0.015;
+			server.hostTipOuts += tipOut;
+			this.tipsReceived += tipOut;
+			await server.save();
+		}
+		await this.save();
+	}
+	// If the team member is a runner
+	else if (this.position === 'runner') {
+		// Find all servers who worked on the same date
+		const servers = await this.model('TeamMember').find({
+			position: 'server',
+			workSchedule: {
+				$elemMatch: {
+					month,
+					dates: {
+						$elemMatch: {
+							$eq: date,
+						},
+					},
+				},
+			},
+		});
+
+		// Update the runnerTipOuts field for each server and the tipsReceived field for the runner
+		for (const server of servers) {
+			const tipOut = server.foodSales * 0.04;
+			server.runnerTipOuts += tipOut;
+			this.tipsReceived += tipOut;
+			await server.save();
+		}
+		await this.save();
+	}
 };
 
-TeamMemberSchema.methods.removeWorkDate = function (dateToRemove) {
-    const month = dateToRemove.getMonth();
-    let monthSchedule = this.workSchedule.find(schedule => schedule.month === month);
+TeamMemberSchema.methods.removeWorkDate = async function(workDate) {
+	// Parse the workDate and get the month
+	const date = parseISO(workDate);
+	const month = getMonth(date);
 
-    if (monthSchedule) {
-        const dateIndex = monthSchedule.dates.findIndex(date => date.getTime() === dateToRemove.getTime());
+	// Find the work schedule for the month
+	let workSchedule = this.workSchedule.find((schedule) => schedule.month === month);
 
-        if (dateIndex !== -1) {
-            monthSchedule.dates.splice(dateIndex, 1);
-        }
+	// If a work schedule exists for the month
+	if (workSchedule) {
+		// Find the index of the workDate in the dates array
+		const dateIndex = workSchedule.dates.findIndex((existingDate) => isEqual(existingDate, date));
 
-        // If there are no more dates in this month, remove the month from the workSchedule
-        if (monthSchedule.dates.length === 0) {
-            const monthIndex = this.workSchedule.findIndex(schedule => schedule.month === month);
-            this.workSchedule.splice(monthIndex, 1);
-        }
-    }
+		// If the dates array contains the workDate, remove it
+		if (dateIndex !== -1) {
+			workSchedule.dates.splice(dateIndex, 1);
+
+			// If the team member is a host
+			if (this.position === 'host') {
+				// Find all servers who worked on the same date
+				const servers = await this.model('TeamMember').find({
+					position: 'server',
+					workSchedule: {
+						$elemMatch: {
+							month,
+							dates: {
+								$elemMatch: {
+									$eq: date,
+								},
+							},
+						},
+					},
+				});
+
+				// Update the hostTipOuts field for each server and the tipsReceived field for the host
+				for (const server of servers) {
+					const tipOut = server.foodSales * 0.015;
+					server.hostTipOuts -= tipOut;
+					this.tipsReceived -= tipOut;
+					await server.save();
+				}
+				await this.save();
+			}
+			// If the team member is a runner
+			else if (this.position === 'runner') {
+				// Find all servers who worked on the same date
+				const servers = await this.model('TeamMember').find({
+					position: 'server',
+					workSchedule: {
+						$elemMatch: {
+							month,
+							dates: {
+								$elemMatch: {
+									$eq: date,
+								},
+							},
+						},
+					},
+				});
+
+				// Update the runnerTipOuts field for each server and the tipsReceived field for the runner
+				for (const server of servers) {
+					const tipOut = server.foodSales * 0.04;
+					server.runnerTipOuts -= tipOut;
+					this.tipsReceived -= tipOut;
+					await server.save();
+				}
+				await this.save();
+			}
+		}
+	}
 };
 
 TeamMemberSchema.methods.removeDailyTotal = function (dailyTotalId) {
