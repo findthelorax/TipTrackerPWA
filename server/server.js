@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 // const session = require('express-session');
+const errorHandler = require('./middleware/errorHandler');
 const teamMembersRoutes = require('./routes/TeamMemberRoutes');
 const teamRoutes = require('./routes/TeamRoutes');
 const workRoutes = require('./routes/WorkScheduleRoutes');
@@ -36,16 +37,14 @@ app.use(express.json());
 // 	})
 // );
 
+app.use(errorHandler);
+
 app.use(teamRoutes);
 app.use(workRoutes);
 app.use(dailyTotalRoutes);
 app.use(weeklyTotalRoutes);
 app.use(teamMembersRoutes);
 
-app.use((err, req, res, next) => {
-	console.error(err.stack);
-	res.status(500).json({ error: error.message || 'Internal Server Error' });
-});
 app.listen(BPORT, () => {
 	console.log(`Server is running on ${IP}:${BPORT}`);
 });

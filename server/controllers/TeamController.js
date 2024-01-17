@@ -2,26 +2,26 @@ const { Team } = require('../models/DatabaseModel');
 const { TeamMember } = require('../models/DatabaseModel');
 require('dotenv').config();
 
-exports.createTeam = async (req, res) => {
+exports.createTeam = async (req, res, next) => {
     const team = new Team(req.body);
     try {
         await team.save();
         res.status(201).send(team);
     } catch (error) {
-        res.status(400).send(error);
+        next(error);
     }
 };
 
-exports.getTeams = async (req, res) => {
+exports.getTeams = async (req, res, next) => {
     try {
         const teams = await Team.find({});
         res.send(teams);
     } catch (error) {
-        res.status(500).send();
+        next(error);
     }
 };
 
-exports.getTeam = async (req, res) => {
+exports.getTeam = async (req, res, next) => {
     try {
         const team = await Team.findById(req.params.teamId).populate('teamMembers');
         if (!team) {
@@ -29,11 +29,11 @@ exports.getTeam = async (req, res) => {
         }
         res.send(team);
     } catch (error) {
-        res.status(500).send();
+        next(error);
     }
 };
 
-exports.updateTeam = async (req, res) => {
+exports.updateTeam = async (req, res, next) => {
     try {
         const team = await Team.findByIdAndUpdate(req.params.teamId, req.body, { new: true, runValidators: true });
         if (!team) {
@@ -41,11 +41,11 @@ exports.updateTeam = async (req, res) => {
         }
         res.send(team);
     } catch (error) {
-        res.status(400).send(error);
+        next(error);
     }
 };
 
-exports.deleteTeam = async (req, res) => {
+exports.deleteTeam = async (req, res, next) => {
     try {
         const team = await Team.findByIdAndDelete(req.params.teamId);
         if (!team) {
@@ -53,11 +53,11 @@ exports.deleteTeam = async (req, res) => {
         }
         res.send(team);
     } catch (error) {
-        res.status(500).send();
+        next(error);
     }
 };
 
-exports.addTeamMember = async (req, res) => {
+exports.addTeamMember = async (req, res, next) => {
     const { teamId, teamMemberId } = req.params;
     try {
         const team = await Team.findById(teamId);
@@ -76,12 +76,11 @@ exports.addTeamMember = async (req, res) => {
 
         res.json({ message: 'Team member added successfully' });
     } catch (error) {
-        console.error(`Error adding team member:`, error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        next(error);
     }
 };
 
-exports.removeTeamMember = async (req, res) => {
+exports.removeTeamMember = async (req, res, next) => {
     const { teamId, teamMemberId } = req.params;
     try {
         const team = await Team.findById(teamId);
@@ -105,7 +104,6 @@ exports.removeTeamMember = async (req, res) => {
         }
         res.json({ message: 'Team member removed successfully' });
     } catch (error) {
-        console.error(`Error removing team member:`, error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        next(error);
     }
 };

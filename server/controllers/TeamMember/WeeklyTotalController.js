@@ -14,7 +14,7 @@ exports.getAllWeeklyTotals = async (req, res, next) => {
 };
 
 // Get weekly totals
-exports.getWeeklyTotals = async (req, res) => {
+exports.getWeeklyTotals = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.id);
 		if (!teamMember) {
@@ -24,13 +24,13 @@ exports.getWeeklyTotals = async (req, res) => {
 		const weeklyTotal = teamMember.getWeeklyTotals(req.query.weekStart);
 		res.send(weeklyTotal);
 	} catch (error) {
-		res.status(500).send(error);
+        next(error);
 	}
 };
 
 
 // Route to get all weekly totals for a specific team member
-exports.getOneTMWeeklyTotals = async (req, res) => {
+exports.getOneTMWeeklyTotals = async (req, res, next) => {
 	try {
 		const { teamMemberId } = req.params;
 		const teamMember = await TeamMember.findById(teamMemberId).select('weeklyTotals');
@@ -40,13 +40,12 @@ exports.getOneTMWeeklyTotals = async (req, res) => {
 		}
 		res.json(teamMember.weeklyTotals);
 	} catch (error) {
-		console.error(error);
-		res.status(500).json({ error: error.message });
+        next(error);
 	}
 };
 
 // Route to get a specific team member's weekly totals for a specific week
-exports.getOneWeeklyTotals = async (req, res) => {
+exports.getOneWeeklyTotals = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 
@@ -65,12 +64,12 @@ exports.getOneWeeklyTotals = async (req, res) => {
 
 		res.status(200).json(weeklyTotal);
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+        next(error);
 	}
 };
 
 // Route to create a specific team member's weekly totals for a specific week
-exports.createWeeklyTotals = async (req, res) => {
+exports.createWeeklyTotals = async (req, res, next) => {
 	try {
 		const memberId = req.params.teamMemberId;
 		const week = req.params.week;
@@ -81,13 +80,12 @@ exports.createWeeklyTotals = async (req, res) => {
 		const teamMember = await TeamMember.findById(memberId);
 		res.json(teamMember.weeklyTotals);
 	} catch (error) {
-		console.error('Error adding weekly totals:', error);
-		res.status(500).json({ error: 'Internal Server Error' });
+        next(error);
 	}
 };
 
 // Delete a specific team member's weekly totals for a specific week
-exports.deleteWeeklyTotals = async (req, res) => {
+exports.deleteWeeklyTotals = async (req, res, next) => {
 	try {
 		const memberId = req.params.teamMemberId;
 		const week = req.params.week;
@@ -101,12 +99,11 @@ exports.deleteWeeklyTotals = async (req, res) => {
 			message: `Weekly totals for the week ${week} for team member ${memberId} deleted`,
 		});
 	} catch (error) {
-		console.error(`Error deleting weekly totals for team member ${memberId}:`, error);
-		res.status(500).json({ error: 'Internal Server Error' });
+        next(error);
 	}
 };
 
-exports.updateWeeklyTotalsPut = async (req, res) => {
+exports.updateWeeklyTotalsPut = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 
@@ -131,11 +128,11 @@ exports.updateWeeklyTotalsPut = async (req, res) => {
 
 		res.status(200).json(teamMember);
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+        next(error);
 	}
 };
 
-exports.updateWeeklyTotalsPatch = async (req, res) => {
+exports.updateWeeklyTotalsPatch = async (req, res, next) => {
 	try {
 		// Parse the date string from the client using moment
 		const weekStartLocal = moment(req.params.week).local().startOf('day').toDate();
@@ -177,6 +174,6 @@ exports.updateWeeklyTotalsPatch = async (req, res) => {
 
 		res.status(200).json({ message: 'Weekly total updated' });
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+        next(error);
 	}
 };

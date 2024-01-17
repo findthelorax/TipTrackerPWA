@@ -1,86 +1,25 @@
 const { TeamMember } = require('../../models/DatabaseModel');
-const { parseISO, getMonth, isEqual } = require('date-fns');
+const { parseISO, isEqual } = require('date-fns');
 require('dotenv').config();
 
-const calculateTipOut = (position, foodSales) => {
-	const tipOutRates = {
-		host: 0.015,
-		runner: 0.04,
-	};
-
-	return foodSales * (tipOutRates[position] || 0);
-};
-
-const updateTipOutsAndTipsReceived = async (teamMember, date, month) => {
-	const servers = await TeamMember.find({
-		position: 'server',
-		workSchedule: {
-			$elemMatch: {
-				month,
-				dates: {
-					$elemMatch: {
-						$eq: date,
-					},
-				},
-			},
-		},
-	});
-
-	for (const server of servers) {
-		const tipOut = calculateTipOut(teamMember.position, server.foodSales);
-		if (teamMember.position === 'host') server.hostTipOuts += tipOut;
-		if (teamMember.position === 'runner') server.runnerTipOuts += tipOut;
-		teamMember.tipsReceived += tipOut;
-		await server.save();
-	}
-
-	await teamMember.save();
-};
-
-const updateTipOutsAndTipsReceivedForRemoval = async (teamMember, date, month) => {
-	const servers = await TeamMember.find({
-		position: 'server',
-		workSchedule: {
-			$elemMatch: {
-				month,
-				dates: {
-					$elemMatch: {
-						$eq: date,
-					},
-				},
-			},
-		},
-	});
-
-	for (const server of servers) {
-		const tipOut = calculateTipOut(teamMember.position, server.foodSales);
-		if (teamMember.position === 'host') server.hostTipOuts -= tipOut;
-		if (teamMember.position === 'runner') server.runnerTipOuts -= tipOut;
-		teamMember.tipsReceived -= tipOut;
-		await server.save();
-	}
-
-	await teamMember.save();
-};
-
 //* Work Schedule
-exports.getAllWorkSchedules = async (req, res) => {
-	try {
-		const teamMembers = await TeamMember.find({});
-		let workSchedulesAll = teamMembers.map((teamMember) => ({
-			name: teamMember.firstName + ' ' + teamMember.lastName,
-			position: teamMember.position,
-			workSchedule: teamMember.workSchedule,
-		}));
+exports.getAllWorkSchedules = async (req, res, next) => {
+    try {
+        const teamMembers = await TeamMember.find({});
+        let workSchedulesAll = teamMembers.map(({ firstName, lastName, position, workSchedule }) => ({
+            name: `${firstName} ${lastName}`,
+            position,
+            workSchedule,
+        }));
 
-		// Filter out team members without work schedules
-		workSchedulesAll = workSchedulesAll.filter((teamMember) => teamMember.workSchedule.length > 0);
+        // Filter out team members without work schedules
+        workSchedulesAll = workSchedulesAll.filter(({ workSchedule }) => workSchedule.length > 0);
 
-		res.json(workSchedulesAll);
-	} catch (error) {
-		console.error(`Error getting work schedules: ${error.message}`);
-		next(error);
-	}
+        res.json(workSchedulesAll);
+    } catch (error) {
+        console.error(`Error getting work schedules: ${error.message}`);
+        next(error);
+    }
 };
 
 exports.getWorkSchedule = async (req, res) => {
@@ -95,18 +34,19 @@ exports.getWorkSchedule = async (req, res) => {
 exports.getWorkScheduleForMonth = async (req, res) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const year = parseInt(req.params.year, 10);
 		const month = parseInt(req.params.month, 10);
-		if (isNaN(month) || month < 0 || month > 11) {
-			return res.status(400).json({ message: 'Invalid month' });
+		if (isNaN(year) || isNaN(month) || month < 0 || month > 11) {
+			return res.status(400).json({ message: 'Invalid year or month' });
 		}
-		const workSchedule = teamMember.getWorkScheduleForMonth(month);
+		const workSchedule = teamMember.getWorkScheduleForMonthAndYear(year, month);
 		res.json(workSchedule);
 	} catch (err) {
 		res.json({ message: err });
 	}
 };
 
-exports.getWorkScheduleByTeam = async (req, res) => {
+exports.getWorkScheduleByTeam = async (req, res, next) => {
 	try {
 		const teamMembers = await TeamMember.find({ teams: req.params.teamId });
 		const workSchedules = teamMembers.flatMap((teamMember) => teamMember.workSchedule);
@@ -117,171 +57,139 @@ exports.getWorkScheduleByTeam = async (req, res) => {
 	}
 };
 
-exports.addWorkDate = async (req, res) => {
+exports.createWorkSchedule = async (req, res, next) => {
 	try {
+		const workDates = req.body.workSchedule;
+		const workSchedule = [];
+
+		for (const workDate of workDates) {
+			const date = new Date(workDate);
+			const year = date.getUTCFullYear();
+			const month = date.getUTCMonth() + 1;
+
+			let monthSchedule = workSchedule.find((schedule) => schedule.year === year && schedule.month === month);
+
+			if (!monthSchedule) {
+				monthSchedule = { year, month, dates: [workDate] };
+				workSchedule.push(monthSchedule);
+			} else {
+				monthSchedule.dates.push(date);
+				monthSchedule.dates.sort((a, b) => a - b);
+			}
+		}
+
 		const updatedTeamMember = await TeamMember.findByIdAndUpdate(
 			req.params.teamMemberId,
-			{ $push: { workSchedule: req.body.workDate } },
+			{ workSchedule },
 			{ new: true }
 		);
+
+        if (['host', 'runner'].includes(updatedTeamMember.position)) {
+            for (const workDate of workDates) {
+                const date = new Date(workDate);
+                await updatedTeamMember.updateTipOuts(date, 'add');
+            }
+        }
+
 		res.json(updatedTeamMember);
 	} catch (err) {
-		res.json({ message: err });
+        next(error);
 	}
 };
 
-exports.createWorkSchedule = async (req, res) => {
-	try {
-		const updatedTeamMember = await TeamMember.findByIdAndUpdate(
-			req.params.teamMemberId,
-			{ workSchedule: req.body.workSchedule },
-			{ new: true }
-		);
-		res.json(updatedTeamMember);
-	} catch (err) {
-		res.json({ message: err });
-	}
-};
-
-exports.deleteWorkSchedule = async (req, res) => {
+exports.deleteWorkSchedule = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 		if (!teamMember) {
 			return res.status(404).send();
 		}
 
+        if (['host', 'runner'].includes(teamMember.position)) {
+            for (const workSchedule of teamMember.workSchedule) {
+                for (const workDate of workSchedule.dates) {
+                    const date = new Date(workDate);
+                    await teamMember.updateTipOuts(date, 'remove');
+                }
+            }
+        }
+
+		// Remove empty months
 		teamMember.workSchedule = [];
 		await teamMember.save();
 
 		res.send(teamMember);
 	} catch (error) {
-		res.json({ message: error });
+        next(error);
 	}
 };
 
-exports.addDateToWorkSchedule = async (req, res) => {
+exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
-		const workDate = req.body.date;
+		const year = parseInt(req.params.year, 10);
+		const month = parseInt(req.params.month, 10);
 
-		// Parse the workDate and get the month
-		const date = parseISO(workDate);
-        const month = date.getUTCMonth() + 1;
-		// Find the work schedule for the month
-		let workSchedule = teamMember.workSchedule.find((schedule) => schedule.month === month);
-
-		// If no work schedule exists for the month, create a new one
-		if (!workSchedule) {
-			workSchedule = { month, dates: [workDate] };
-			teamMember.workSchedule.push(workSchedule);
-		} else {
-			// Check if the dates array already contains the new workDate
-			const hasDate = workSchedule.dates.some((existingDate) => isEqual(existingDate, date));
-
-			// If the dates array contains the new workDate, throw an error
-			if (hasDate) {
-				throw new Error('The date already exists in the work schedule for this month.');
-			} else {
-				// If the dates array does not contain the new workDate, add it
-				workSchedule.dates.push(date);
-                workSchedule.dates.sort((a, b) => a - b);
-				teamMember.markModified('workSchedule');
-			}
+		if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+			return res.status(400).json({ message: 'Invalid year or month' });
 		}
 
-		// If the team member is a host or a runner
-		if (['host', 'runner'].includes(teamMember.position)) {
-			await updateTipOutsAndTipsReceived(teamMember, date, month);
-		}
+		// Find the work schedule for the year and month
+		let workScheduleIndex = teamMember.workSchedule.findIndex((schedule) => schedule.year === year && schedule.month === month);
 
-		await teamMember.save();
-		res.json(teamMember);
-	} catch (err) {
-		res.json({ message: err });
-	}
-};
-
-exports.removeDateFromWorkSchedule = async (req, res) => {
-	try {
-		const teamMember = await TeamMember.findById(req.params.teamMemberId);
-		const workDate = req.body.date;
-
-		// Parse the workDate and get the month
-		const date = parseISO(workDate);
-        const month = date.getUTCMonth() + 1;
-
-		// Find the work schedule for the month
-		let workSchedule = teamMember.workSchedule.find((schedule) => schedule.month === month);
-
-		// If a work schedule exists for the month
-		if (workSchedule) {
-			// Find the index of the workDate in the dates array
-			const dateIndex = workSchedule.dates.findIndex((existingDate) => isEqual(existingDate, date));
-
-			// If the dates array contains the workDate, remove it
-			if (dateIndex !== -1) {
-				workSchedule.dates.splice(dateIndex, 1);
-
-				// If the team member is a host or a runner
-				if (['host', 'runner'].includes(teamMember.position)) {
-					await updateTipOutsAndTipsReceivedForRemoval(teamMember, date, month);
+		// If a work schedule exists for the year and month, remove it
+		if (workScheduleIndex !== -1) {
+			if (['host', 'runner'].includes(teamMember.position)) {
+				for (const workDate of teamMember.workSchedule[workScheduleIndex].dates) {
+					const date = new Date(workDate);
+					await updateTipOutsAndTipsReceivedForRemoval(teamMember, date);
 				}
 			}
+
+			teamMember.workSchedule.splice(workScheduleIndex, 1);
+			await teamMember.save();
 		}
 
+		res.json(teamMember);
+	} catch (err) {
+		next(error);
+	}
+};
+
+exports.addDateToWorkSchedule = async (req, res, next) => {
+	try {
+		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const workDate = parseISO(req.body.date);
+
+		teamMember.addDateToWorkSchedule(workDate);
+
+		if (['host', 'runner'].includes(teamMember.position)) {
+			await teamMember.updateTipOuts(workDate, 'add');
+		}
+
+		teamMember.markModified('workSchedule');
+		await teamMember.save();
+		res.json(teamMember);
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.removeDateFromWorkSchedule = async (req, res, next) => {
+	try {
+		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const workDate = parseISO(req.body.date);
+
+		teamMember.removeDateFromWorkSchedule(workDate);
+
+		if (['host', 'runner'].includes(teamMember.position)) {
+			await teamMember.updateTipOuts(workDate, 'remove');
+		}
+
+		teamMember.markModified('workSchedule');
 		await teamMember.save();
 
 		res.json(teamMember);
 	} catch (err) {
-		res.json({ message: err });
+		next(err);
 	}
 };
-
-// exports.addDateToWorkSchedule = async (req, res) => {
-//     try {
-//         const teamMember = await TeamMember.findById(req.params.teamMemberId);
-//         const currentMonth = new Date(req.body.date).getMonth() + 1;
-//         console.log("🚀 ~ exports.addDateToWorkSchedule= ~ req.body.date:", req.body.date)
-//         let workSchedule = teamMember.workSchedule.find(schedule => schedule.month === currentMonth);
-
-//         if (workSchedule) {
-//             workSchedule.dates.push(new Date(req.body.date));
-//         } else {
-//             workSchedule = {
-//                 month: currentMonth,
-//                 dates: [new Date(req.body.date)]
-//             };
-//             teamMember.workSchedule.push(workSchedule);
-//         }
-
-//         const updatedTeamMember = await teamMember.save();
-//         res.json(updatedTeamMember);
-//     } catch (err) {
-//         res.json({ message: err });
-//     }
-// };
-
-// exports.removeDateFromWorkSchedule = async (req, res) => {
-//     try {
-//         const teamMember = await TeamMember.findById(req.params.teamMemberId);
-//         const currentMonth = new Date(req.body.date).getMonth() + 1;
-//         const workSchedule = teamMember.workSchedule.find(schedule => schedule.month === currentMonth);
-
-//         if (workSchedule) {
-//             const dateToRemove = new Date(req.body.date);
-//             const index = workSchedule.dates.findIndex(date => {
-//                 return date.getUTCFullYear() === dateToRemove.getUTCFullYear() &&
-//                     date.getUTCMonth() === dateToRemove.getUTCMonth() &&
-//                     date.getUTCDate() === dateToRemove.getUTCDate();
-//             });
-//             if (index > -1) {
-//                 workSchedule.dates.splice(index, 1);
-//             }
-//         }
-
-//         const updatedTeamMember = await teamMember.save();
-//         res.json(updatedTeamMember);
-//     } catch (err) {
-//         res.json({ message: err });
-//     }
-// };

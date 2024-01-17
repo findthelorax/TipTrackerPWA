@@ -3,17 +3,16 @@ const { Team } = require('../../models/DatabaseModel');
 require('dotenv').config();
 
 // Get All Team Members
-exports.getTeamMembers = async (req, res) => {
+exports.getTeamMembers = async (req, res, next) => {
 	try {
 		const teamMembers = await TeamMember.find();
 		res.json(teamMembers);
 	} catch (err) {
-		console.error(err);
-		res.status(500).json({ message: 'Server error' });
+        next(error);
 	}
 };
 
-exports.getTeamMember = async (req, res) => {
+exports.getTeamMember = async (req, res, next) => {
 	const teamMemberId = req.params.teamMemberId;
 	if (!teamMemberId) {
 		return res.status(400).json({
@@ -34,15 +33,11 @@ exports.getTeamMember = async (req, res) => {
 			data: teamMember,
 		});
 	} catch (err) {
-		console.log(err);
-		return res.status(400).json({
-			success: false,
-			error: err,
-		});
+        next(error);
 	}
 };
 
-exports.createTeamMember = async (req, res) => {
+exports.createTeamMember = async (req, res, next) => {
 	const { firstName, lastName, position, teams } = req.body;
 	if (!firstName || !lastName || !position) {
 		return res.status(400).json({ error: 'Both first name, last name and position are required' });
@@ -69,12 +64,12 @@ exports.createTeamMember = async (req, res) => {
 				error: `A team member ${firstName} ${lastName} - ${position} already exists.`,
 			});
 		} else {
-			res.status(400).send({ message: error.message });
+			next(error);
 		}
 	}
 };
 
-exports.updateTeamMember = async (req, res) => {
+exports.updateTeamMember = async (req, res, next) => {
 	const { firstName, lastName, position, teamId } = req.body;
 	const teamMemberId = req.params.teamMemberId;
 
@@ -99,7 +94,7 @@ exports.updateTeamMember = async (req, res) => {
 	}
 };
 
-exports.deleteTeamMember = async (req, res) => {
+exports.deleteTeamMember = async (req, res, next) => {
 	const teamMemberId = req.params.teamMemberId;
 	const teamMember = await TeamMember.findById(teamMemberId);
 	if (!teamMember) {
@@ -124,7 +119,6 @@ exports.deleteTeamMember = async (req, res) => {
 			message: `Team member ${teamMember.firstName} ${teamMember.lastName} (${teamMember.position}) was deleted`,
 		});
 	} catch (error) {
-		console.error(`Error deleting team member ${teamMemberId}:`, error);
-		res.status(500).json({ error: 'Internal Server Error' });
+        next(error);
 	}
 };
