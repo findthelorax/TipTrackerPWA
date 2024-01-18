@@ -105,7 +105,7 @@ exports.createDailyTotal = async (req, res, next) => {
 			counts[member.position] = (counts[member.position] || 0) + 1;
 			return counts;
 		}, {});
-		
+
 		const position = teamMember.position.toLowerCase();
 		// Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
 		if (position === 'server') {
@@ -128,6 +128,29 @@ exports.createDailyTotal = async (req, res, next) => {
 		next(error);
 	}
 };
+
+// const position = teamMember.position.toLowerCase();
+// // Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
+// if (position === 'server') {
+// 	// Logic for when a server's dailyTotal is added
+// 	const tipOuts = {
+// 		host: (dailyTotal.potentialTipOuts.host) / positionCounts['host'],
+// 		runner: (dailyTotal.potentialTipOuts.runner) / positionCounts['runner'],
+// 		bartender: (dailyTotal.potentialTipOuts.bartender) / positionCounts['bartender'],
+// 	};
+// 	console.log("🚀 ~ exports.createDailyTotal= ~ tipOuts:", tipOuts)
+// } else if (position === 'bartender') {
+// 	// Logic for when a bartender's dailyTotal is added
+// 	const servers = teamMembersOnSameTeamYearMonthAndDate.filter((member) => member.position === 'server');
+// 	for (const server of servers) {
+// 		const serverDailyTotal = server.dailyTotals.find((total) => total.date === dailyTotal.date);
+// 		if (serverDailyTotal) {
+// 			const barTipOut = serverDailyTotal.potentialTipOuts.bartender / positionCounts['bartender'];
+// 			await server.updateTipOuts(barTipOut, 'add');
+// 			await teamMember.updateTipOuts(barTipOut, 'add');
+// 		}
+// 	}
+// }
 
 // Remove a daily total
 exports.removeDailyTotal = async (req, res, next) => {
