@@ -6,9 +6,9 @@ const WorkScheduleController = require('../controllers/TeamMember/WorkScheduleCo
 router.get('/teamMembers/allWorkSchedules', WorkScheduleController.getAllWorkSchedules);
 
 router.get('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.getWorkSchedule);
+router.get('/teamMembers/:teamId/workSchedule', WorkScheduleController.getWorkScheduleByTeam);
 router.get('/teamMembers/:teamMemberId/workSchedule/:year/:month', WorkScheduleController.getWorkScheduleForMonth);
 
-router.get('/teamMembers/:teamId/workSchedule', WorkScheduleController.getWorkScheduleByTeam);
 
 // Create a new work schedule for a team member
 router.post('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.createWorkSchedule);

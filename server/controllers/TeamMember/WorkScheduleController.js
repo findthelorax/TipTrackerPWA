@@ -4,22 +4,22 @@ require('dotenv').config();
 
 //* Work Schedule
 exports.getAllWorkSchedules = async (req, res, next) => {
-    try {
-        const teamMembers = await TeamMember.find({});
-        let workSchedulesAll = teamMembers.map(({ firstName, lastName, position, workSchedule }) => ({
-            name: `${firstName} ${lastName}`,
-            position,
-            workSchedule,
-        }));
+	try {
+		const teamMembers = await TeamMember.find({});
+		let workSchedulesAll = teamMembers.map(({ firstName, lastName, position, workSchedule }) => ({
+			name: `${firstName} ${lastName}`,
+			position,
+			workSchedule,
+		}));
 
-        // Filter out team members without work schedules
-        workSchedulesAll = workSchedulesAll.filter(({ workSchedule }) => workSchedule.length > 0);
+		// Filter out team members without work schedules
+		workSchedulesAll = workSchedulesAll.filter(({ workSchedule }) => workSchedule.length > 0);
 
-        res.json(workSchedulesAll);
-    } catch (error) {
-        console.error(`Error getting work schedules: ${error.message}`);
-        next(error);
-    }
+		res.json(workSchedulesAll);
+	} catch (error) {
+		console.error(`Error getting work schedules: ${error.message}`);
+		next(error);
+	}
 };
 
 exports.getWorkSchedule = async (req, res) => {
@@ -84,16 +84,16 @@ exports.createWorkSchedule = async (req, res, next) => {
 			{ new: true }
 		);
 
-        if (['host', 'runner'].includes(updatedTeamMember.position)) {
-            for (const workDate of workDates) {
-                const date = new Date(workDate);
-                await updatedTeamMember.updateTipOuts(date, 'add');
-            }
-        }
+		if (['host', 'runner'].includes(updatedTeamMember.position.toLowerCase())) {
+			for (const workDate of workDates) {
+				const date = new Date(workDate);
+				await updatedTeamMember.updateTipOuts(date, 'add');
+			}
+		}
 
 		res.json(updatedTeamMember);
 	} catch (err) {
-        next(error);
+		next(error);
 	}
 };
 
@@ -104,14 +104,14 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 			return res.status(404).send();
 		}
 
-        if (['host', 'runner'].includes(teamMember.position)) {
-            for (const workSchedule of teamMember.workSchedule) {
-                for (const workDate of workSchedule.dates) {
-                    const date = new Date(workDate);
-                    await teamMember.updateTipOuts(date, 'remove');
-                }
-            }
-        }
+		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
+			for (const workSchedule of teamMember.workSchedule) {
+				for (const workDate of workSchedule.dates) {
+					const date = new Date(workDate);
+					await teamMember.updateTipOuts(date, 'remove');
+				}
+			}
+		}
 
 		// Remove empty months
 		teamMember.workSchedule = [];
@@ -119,7 +119,7 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 
 		res.send(teamMember);
 	} catch (error) {
-        next(error);
+		next(error);
 	}
 };
 
@@ -134,11 +134,13 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 		}
 
 		// Find the work schedule for the year and month
-		let workScheduleIndex = teamMember.workSchedule.findIndex((schedule) => schedule.year === year && schedule.month === month);
+		let workScheduleIndex = teamMember.workSchedule.findIndex(
+			(schedule) => schedule.year === year && schedule.month === month
+		);
 
 		// If a work schedule exists for the year and month, remove it
 		if (workScheduleIndex !== -1) {
-			if (['host', 'runner'].includes(teamMember.position)) {
+			if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
 				for (const workDate of teamMember.workSchedule[workScheduleIndex].dates) {
 					const date = new Date(workDate);
 					await updateTipOutsAndTipsReceivedForRemoval(teamMember, date);
@@ -162,7 +164,7 @@ exports.addDateToWorkSchedule = async (req, res, next) => {
 
 		teamMember.addDateToWorkSchedule(workDate);
 
-		if (['host', 'runner'].includes(teamMember.position)) {
+		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
 			await teamMember.updateTipOuts(workDate, 'add');
 		}
 
@@ -181,7 +183,7 @@ exports.removeDateFromWorkSchedule = async (req, res, next) => {
 
 		teamMember.removeDateFromWorkSchedule(workDate);
 
-		if (['host', 'runner'].includes(teamMember.position)) {
+		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
 			await teamMember.updateTipOuts(workDate, 'remove');
 		}
 

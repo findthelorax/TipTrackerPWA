@@ -17,24 +17,14 @@ const DailyTotalSchema = new mongoose.Schema({
 	barSales: Number,
 	nonCashTips: Number,
 	cashTips: Number,
-	barTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
-	runnerTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
-	hostTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
+	potentialTipOuts: {
+        host: Number,
+        runner: Number,
+        bartender: Number,
+    },
+	barTipOuts: Number,
+	runnerTipOuts: Number,
+	hostTipOuts: Number,
 	totalTipOut: Number,
 	tipsReceived: Number,
 	totalPayrollTips: Number,
@@ -49,24 +39,9 @@ const WeeklyTotalSchema = new mongoose.Schema({
 	barSales: Number,
 	nonCashTips: Number,
 	cashTips: Number,
-	barTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
-	runnerTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
-	hostTipOuts: [
-		{
-			teamMember: { type: Schema.Types.ObjectId, ref: 'TeamMember' },
-			amount: Number,
-		},
-	],
+	barTipOuts: Number,
+	runnerTipOuts: Number,
+	hostTipOuts: Number,
 	totalTipOut: Number,
 	tipsReceived: Number,
 	totalPayrollTips: Number,
@@ -91,13 +66,13 @@ const TeamMemberSchema = new mongoose.Schema({
 
 DailyTotalSchema.pre('save', function (next) {
 	this.year = this.date.getFullYear();
-	this.month = this.date.getMonth();
+	this.month = this.date.getMonth() + 1;
 	next();
 });
 
 WeeklyTotalSchema.pre('save', function (next) {
 	this.year = this.weekStart.getFullYear();
-	this.month = this.weekStart.getMonth();
+	this.month = this.weekStart.getMonth() + 1;
 	this.weekStart = startOfWeek(this.date, { weekStartsOn: 1 });
 	this.weekEnd = endOfWeek(this.date, { weekStartsOn: 1 });
 	next();
@@ -127,9 +102,7 @@ TeamMemberSchema.pre('save', function (next) {
 
 TeamMemberSchema.pre('remove', async function (next) {
 	const teamMember = this;
-
 	await Team.updateMany({ teamMembers: teamMember._id }, { $pull: { teamMembers: teamMember._id } });
-
 	next();
 });
 
@@ -187,21 +160,15 @@ TeamMemberSchema.methods.addDailyTotal = async function (dailyTotal) {
 		throw new Error('A daily total for this date already exists.');
 	}
 
-	// Calculate totalTipOut
-	dailyTotal.totalTipOut = 0;
-	if (dailyTotal.barTipOuts) {
-		dailyTotal.barTipOuts.forEach(tipOut => dailyTotal.totalTipOut += tipOut.amount);
+	if (this.position.toLowerCase() === 'server') {
+		dailyTotal.potentialTipOuts = {
+			host: dailyTotal.foodSales * TIP_OUT_RATES.host,
+			runner: dailyTotal.foodSales * TIP_OUT_RATES.runner,
+			bartender: dailyTotal.barSales * TIP_OUT_RATES.bartender,
+		};
 	}
-	if (dailyTotal.runnerTipOuts) {
-		dailyTotal.runnerTipOuts.forEach(tipOut => dailyTotal.totalTipOut += tipOut.amount);
-	}
-	if (dailyTotal.hostTipOuts) {
-		dailyTotal.hostTipOuts.forEach(tipOut => dailyTotal.totalTipOut += tipOut.amount);
-	}
-
 	// Calculate tipsReceived and totalPayrollTips
-	dailyTotal.tipsReceived = dailyTotal.nonCashTips + dailyTotal.cashTips;
-	dailyTotal.totalPayrollTips = dailyTotal.tipsReceived - dailyTotal.totalTipOut;
+	dailyTotal.tipsReceived = (dailyTotal.nonCashTips || 0) + (dailyTotal.cashTips || 0);
 
 	this.dailyTotals.push(dailyTotal);
 	this.markModified('dailyTotals');

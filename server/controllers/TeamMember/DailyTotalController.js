@@ -24,7 +24,7 @@ exports.getDailyTotals = async (req, res, next) => {
 		}
 		res.json(teamMember.dailyTotals);
 	} catch (error) {
-        next(error);
+		next(error);
 	}
 };
 
@@ -48,7 +48,7 @@ exports.getDailyTotal = async (req, res, next) => {
 		const dailyTotal = teamMember.dailyTotals[dailyTotalIndex];
 		res.json(dailyTotal);
 	} catch (error) {
-        next(error);
+		next(error);
 	}
 };
 
@@ -76,6 +76,46 @@ exports.createDailyTotal = async (req, res, next) => {
 		// Add date to workSchedule
 		const date = new Date(dailyTotal.date); // assuming dailyTotal.date is the date you want to add
 		teamMember.addDateToWorkSchedule(date);
+
+		// Get the team of the teamMember
+		const team = teamMember.teams;
+
+		// Get the year, month, and date from the dailyTotal date
+		const year = date.getFullYear();
+		const month = date.getMonth() + 1;
+
+		// Find all team members who are on the same team, worked in the same year, in the same month, and on the same date
+		const teamMembersOnSameTeamYearMonthAndDate = await TeamMember.find({
+			teams: team,
+			workSchedule: {
+				$elemMatch: {
+					year: year,
+					month: month,
+					dates: {
+						$elemMatch: {
+							$eq: date,
+						},
+					},
+				},
+			},
+		});
+
+		// Group team members by position and count the number of members in each position
+		const positionCounts = teamMembersOnSameTeamYearMonthAndDate.reduce((counts, member) => {
+			counts[member.position] = (counts[member.position] || 0) + 1;
+			return counts;
+		}, {});
+		
+		const position = teamMember.position.toLowerCase();
+		// Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
+		if (position === 'server') {
+			console.log('🚀 ~ exports.createDailyTotal= ~ teamMember:', teamMember.firstName);
+
+			// Logic for when a server's dailyTotal is added
+		} else if (position === 'bartender') {
+			console.log('🚀 ~ exports.createDailyTotal= ~ teamMember:', teamMember.firstName);
+			// Logic for when a bartender's dailyTotal is added
+		}
 
 		teamMember.markModified('workSchedule');
 		await teamMember.save();
@@ -139,6 +179,6 @@ exports.updateDailyTotal = async (req, res, next) => {
 			message: 'Daily total updated successfully',
 		});
 	} catch (error) {
-        next(error);
+		next(error);
 	}
 };
