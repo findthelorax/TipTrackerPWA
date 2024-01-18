@@ -108,13 +108,12 @@ exports.createDailyTotal = async (req, res, next) => {
 
 		const position = teamMember.position.toLowerCase();
 		// Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
-		if (position === 'server') {
-			console.log('🚀 ~ exports.createDailyTotal= ~ teamMember:', teamMember.firstName);
 
-			// Logic for when a server's dailyTotal is added
+		// Logic for when a server's dailyTotal is added
+		if (position === 'server') {
+			await handleServerLogic(teamMember, teamMembersOnSameTeamYearMonthAndDate, date);
 		} else if (position === 'bartender') {
-			console.log('🚀 ~ exports.createDailyTotal= ~ teamMember:', teamMember.firstName);
-			// Logic for when a bartender's dailyTotal is added
+			await handleBartenderLogic(teamMember, teamMembersOnSameTeamYearMonthAndDate, date);
 		}
 
 		teamMember.markModified('workSchedule');
@@ -129,60 +128,115 @@ exports.createDailyTotal = async (req, res, next) => {
 	}
 };
 
-// const position = teamMember.position.toLowerCase();
-// // Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
-// if (position === 'server') {
-// 	// Logic for when a server's dailyTotal is added
-// 	const tipOuts = {
-// 		host: (dailyTotal.potentialTipOuts.host) / positionCounts['host'],
-// 		runner: (dailyTotal.potentialTipOuts.runner) / positionCounts['runner'],
-// 		bartender: (dailyTotal.potentialTipOuts.bartender) / positionCounts['bartender'],
-// 	};
-// 	console.log("🚀 ~ exports.createDailyTotal= ~ tipOuts:", tipOuts)
-// } else if (position === 'bartender') {
-// 	// Logic for when a bartender's dailyTotal is added
-// 	const servers = teamMembersOnSameTeamYearMonthAndDate.filter((member) => member.position === 'server');
-// 	for (const server of servers) {
-// 		const serverDailyTotal = server.dailyTotals.find((total) => total.date === dailyTotal.date);
-// 		if (serverDailyTotal) {
-// 			const barTipOut = serverDailyTotal.potentialTipOuts.bartender / positionCounts['bartender'];
-// 			await server.updateTipOuts(barTipOut, 'add');
-// 			await teamMember.updateTipOuts(barTipOut, 'add');
-// 		}
-// 	}
-// }
+async function handleServerLogic(server, teamMembers, date) {
+	const bartenders = filterMembersByPosition(teamMembers, 'bartender');
+	const runners = filterMembersByPosition(teamMembers, 'runner');
+	const hosts = filterMembersByPosition(teamMembers, 'host');
+
+	const serverDailyTotal = findDailyTotalByDate(server.dailyTotals, date);
+
+	if (bartenders.length > 0) serverDailyTotal.barTipOuts = serverDailyTotal.potentialTipOuts.bartender;
+	if (runners.length > 0) serverDailyTotal.runnerTipOuts = serverDailyTotal.potentialTipOuts.runner;
+	if (hosts.length > 0) serverDailyTotal.hostTipOuts = serverDailyTotal.potentialTipOuts.host;
+
+	serverDailyTotal.barTipOuts = serverDailyTotal.barTipOuts || 0;
+    serverDailyTotal.runnerTipOuts = serverDailyTotal.runnerTipOuts || 0;
+    serverDailyTotal.hostTipOuts = serverDailyTotal.hostTipOuts || 0;
+
+	// Calculate totalTipOut and tipsReceived
+	serverDailyTotal.totalTipOut =
+		serverDailyTotal.barTipOuts + serverDailyTotal.runnerTipOuts + serverDailyTotal.hostTipOuts;
+	serverDailyTotal.tipsReceived = serverDailyTotal.nonCashTips + serverDailyTotal.cashTips;
+	serverDailyTotal.totalPayrollTips = serverDailyTotal.tipsReceived - serverDailyTotal.totalTipOut;
+
+	await server.save(); 
+	
+	await distributeTips(bartenders, server.barTipOuts, date);
+	await distributeTips(runners, server.runnerTipOuts, date);
+	await distributeTips(hosts, server.hostTipOuts, date);
+
+	await server.save(); 
+}
+
+async function handleBartenderLogic(bartender, teamMembers, date) {
+	const servers = filterMembersByPosition(teamMembers, 'server');
+	const bartenders = filterMembersByPosition(teamMembers, 'bartender');
+
+	// Update the barTipOuts for each server
+	await updateBarTipOuts(servers, date);
+
+	// Recalculate totalBarTipOut after updating the barTipOuts for each server
+	const totalBarTipOut = servers.reduce(
+		(total, server) => total + findDailyTotalByDate(server.dailyTotals, date).barTipOuts,
+		0
+	);
+
+	// Distribute the tips among the bartenders
+	await distributeTips(bartenders, totalBarTipOut, date);
+}
+
+function filterMembersByPosition(members, position) {
+	return members.filter((member) => member.position.toLowerCase() === position);
+}
+
+function findDailyTotalByDate(dailyTotals, date) {
+	return dailyTotals.find((total) => total.date.getTime() === date.getTime());
+}
+
+async function updateBarTipOuts(servers, date) {
+	for (let server of servers) {
+		const serverDailyTotal = findDailyTotalByDate(server.dailyTotals, date);
+		if (!serverDailyTotal) continue;
+
+		serverDailyTotal.barTipOuts = serverDailyTotal.potentialTipOuts.bartender;
+		await server.save();
+	}
+}
+
+async function distributeTips(members, totalTipOut, date) {
+	const splitTipOut = totalTipOut / members.length;
+	for (let member of members) {
+		const memberDailyTotal = findDailyTotalByDate(member.dailyTotals, date);
+		if (!memberDailyTotal) continue;
+
+		memberDailyTotal.tipsReceived += splitTipOut;
+		memberDailyTotal.totalPayrollTips = memberDailyTotal.tipsReceived - memberDailyTotal.totalTipOut;
+		await member.save();
+	}
+}
 
 // Remove a daily total
 exports.removeDailyTotal = async (req, res, next) => {
 	try {
 		const { teamMemberId, dailyTotalId } = req.params;
 
-		const teamMember = await TeamMember.findById(teamMemberId);
+		// Retrieve the dailyTotal before removing it
+		const teamMember = await TeamMember.findOne(
+			{ _id: teamMemberId, 'dailyTotals._id': dailyTotalId },
+			{ 'dailyTotals.$': 1 }
+		);
 		if (!teamMember) {
-			return res.status(404).send({ message: 'Team member not found' });
+			return res.status(404).send({ message: 'Team member or daily total not found' });
 		}
 
-		const dailyTotal = teamMember.dailyTotals.id(dailyTotalId);
-		if (!dailyTotal) {
-			return res.status(404).send({ message: 'Daily total not found' });
-		}
-
-		// Remove date from workSchedule
+		const dailyTotal = teamMember.dailyTotals[0];
 		const date = new Date(dailyTotal.date); // assuming dailyTotal.date is the date you want to remove
-		teamMember.removeDateFromWorkSchedule(date);
+		const year = date.getFullYear();
+		const month = date.getMonth();
 
-		// Remove dailyTotal
-		try {
-			teamMember.removeDailyTotal(dailyTotalId);
-			teamMember.markModified('dailyTotals');
-			teamMember.markModified('workSchedule');
-			await teamMember.save();
-			res.send({ message: 'Daily total deleted successfully' });
-		} catch (err) {
-			next(err);
+		// Use MongoDB's $pull operator to directly remove the daily total we're interested in
+		const result = await TeamMember.updateOne(
+			{ _id: teamMemberId },
+			{ $pull: { dailyTotals: { _id: dailyTotalId }, workSchedule: { year: year, month: month } } }
+		);
+
+		if (result.nModified === 0) {
+			return res.status(404).send({ message: 'Team member or daily total not found' });
 		}
-	} catch (error) {
-		next(error);
+
+		res.send({ message: 'Daily total deleted successfully' });
+	} catch (err) {
+		next(err);
 	}
 };
 

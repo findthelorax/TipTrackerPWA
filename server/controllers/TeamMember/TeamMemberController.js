@@ -39,33 +39,31 @@ exports.getTeamMember = async (req, res, next) => {
 
 exports.createTeamMember = async (req, res, next) => {
 	const { firstName, lastName, position, teams } = req.body;
+
 	if (!firstName || !lastName || !position) {
-		return res.status(400).json({ error: 'Both first name, last name and position are required' });
+		return res.status(400).json({ error: 'First name, last name, and position are required' });
 	}
 
-	const newMember = new TeamMember({ firstName, lastName, position, teams });
-
 	try {
-		const savedMember = await newMember.save();
-
-		if (teams && teams.length > 0) {
-			const team = await Team.findById(teams[0]);
+		for (const teamId of teams) {
+			const team = await Team.findById(teamId);
 			if (!team) {
-				return res.status(404).json({ error: 'Team not found' });
+				return res.status(400).json({ error: `Team with id ${teamId} does not exist` });
 			}
-			team.teamMembers.push(savedMember._id);
-			await team.save();
 		}
 
-		res.status(201).json(savedMember);
-	} catch (error) {
-		if (error.code === 11000) {
-			res.status(400).json({
-				error: `A team member ${firstName} ${lastName} - ${position} already exists.`,
-			});
-		} else {
-			next(error);
-		}
+		const newTeamMember = new TeamMember({
+			firstName,
+			lastName,
+			position,
+			teams
+		});
+
+		const savedTeamMember = await newTeamMember.save();
+
+		res.status(201).json(savedTeamMember);
+	} catch (err) {
+		next(err);
 	}
 };
 

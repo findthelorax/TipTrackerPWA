@@ -31,7 +31,7 @@ exports.getWorkSchedule = async (req, res) => {
 	}
 };
 
-exports.getWorkScheduleForMonth = async (req, res) => {
+exports.getWorkScheduleForYearAndMonth = async (req, res) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 		const year = parseInt(req.params.year, 10);
@@ -39,7 +39,7 @@ exports.getWorkScheduleForMonth = async (req, res) => {
 		if (isNaN(year) || isNaN(month) || month < 0 || month > 11) {
 			return res.status(400).json({ message: 'Invalid year or month' });
 		}
-		const workSchedule = teamMember.getWorkScheduleForMonthAndYear(year, month);
+		const workSchedule = teamMember.getWorkScheduleForYearAndMonth(year, month);
 		res.json(workSchedule);
 	} catch (err) {
 		res.json({ message: err });
@@ -140,12 +140,8 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 
 		// If a work schedule exists for the year and month, remove it
 		if (workScheduleIndex !== -1) {
-			if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
-				for (const workDate of teamMember.workSchedule[workScheduleIndex].dates) {
-					const date = new Date(workDate);
-					await updateTipOutsAndTipsReceivedForRemoval(teamMember, date);
-				}
-			}
+			const workSchedule = teamMember.workSchedule[workScheduleIndex];
+			
 
 			teamMember.workSchedule.splice(workScheduleIndex, 1);
 			await teamMember.save();

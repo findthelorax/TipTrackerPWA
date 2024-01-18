@@ -4,9 +4,9 @@ const Team = require('./TeamModel');
 const { startOfWeek, endOfWeek, isSameOrAfter, isSameOrBefore, parseISO, isValid } = require('date-fns');
 
 const TIP_OUT_RATES = {
-    host: 0.015,
-    runner: 0.04,
-    bartender: 0.05
+	host: 0.015,
+	runner: 0.04,
+	bartender: 0.05,
 };
 
 const DailyTotalSchema = new mongoose.Schema({
@@ -17,17 +17,47 @@ const DailyTotalSchema = new mongoose.Schema({
 	barSales: Number,
 	nonCashTips: Number,
 	cashTips: Number,
-	potentialTipOuts: {
-        host: Number,
-        runner: Number,
-        bartender: Number,
-    },
 	barTipOuts: Number,
 	runnerTipOuts: Number,
 	hostTipOuts: Number,
-	totalTipOut: Number,
-	tipsReceived: Number,
-	totalPayrollTips: Number,
+	potentialTipOuts: {
+		host: {
+			type: Number,
+			default: function () {
+				return this.foodSales * TIP_OUT_RATES.host;
+			},
+		},
+		runner: {
+			type: Number,
+			default: function () {
+				return this.foodSales * TIP_OUT_RATES.runner;
+			},
+		},
+		bartender: {
+			type: Number,
+			default: function () {
+				return this.barSales * TIP_OUT_RATES.bartender;
+			},
+		},
+	},
+	totalTipOut: {
+		type: Number,
+		default: function () {
+			return (this.barTipOuts || 0) + (this.runnerTipOuts || 0) + (this.hostTipOuts || 0);
+		},
+	},
+	tipsReceived: {
+		type: Number,
+		default: function () {
+			return (this.nonCashTips || 0) + (this.cashTips || 0);
+		},
+	},
+	totalPayrollTips: {
+		type: Number,
+		default: function () {
+			return (this.nonCashTips || 0) + (this.cashTips || 0) - (this.totalTipOut || 0);
+		},
+	},
 });
 
 const WeeklyTotalSchema = new mongoose.Schema({
@@ -42,9 +72,24 @@ const WeeklyTotalSchema = new mongoose.Schema({
 	barTipOuts: Number,
 	runnerTipOuts: Number,
 	hostTipOuts: Number,
-	totalTipOut: Number,
-	tipsReceived: Number,
-	totalPayrollTips: Number,
+	totalTipOut: {
+		type: Number,
+		default: function () {
+			return (this.barTipOuts || 0) + (this.runnerTipOuts || 0) + (this.hostTipOuts || 0);
+		},
+	},
+	tipsReceived: {
+		type: Number,
+		default: function () {
+			return (this.nonCashTips || 0) + (this.cashTips || 0);
+		},
+	},
+	totalPayrollTips: {
+		type: Number,
+		default: function () {
+			return (this.nonCashTips || 0) + (this.cashTips || 0) - (this.totalTipOut || 0);
+		},
+	},
 });
 
 const TeamMemberSchema = new mongoose.Schema({
@@ -63,26 +108,47 @@ const TeamMemberSchema = new mongoose.Schema({
 	weeklyTotals: [WeeklyTotalSchema],
 });
 
-
 DailyTotalSchema.pre('save', function (next) {
-	this.year = this.date.getFullYear();
-	this.month = this.date.getMonth() + 1;
+	this.year = this.date.getUTCFullYear();
+	this.month = this.date.getUTCMonth() + 1;
 	next();
 });
 
 WeeklyTotalSchema.pre('save', function (next) {
-	this.year = this.weekStart.getFullYear();
-	this.month = this.weekStart.getMonth() + 1;
+	this.year = this.weekStart.getUTCFullYear();
+	this.month = this.weekStart.getUTCMonth() + 1;
 	this.weekStart = startOfWeek(this.date, { weekStartsOn: 1 });
 	this.weekEnd = endOfWeek(this.date, { weekStartsOn: 1 });
 	next();
 });
 
-TeamMemberSchema.methods.validateDailyTotal = function(dailyTotal) {
-    dailyTotal.date = parseISO(dailyTotal.date);
-    return (
-        isValid(dailyTotal.date) && dailyTotal.foodSales && dailyTotal.barSales && dailyTotal.nonCashTips && dailyTotal.cashTips
-    );
+TeamMemberSchema.methods.validateDailyTotal = function (dailyTotal) {
+	const date = new Date(dailyTotal.date);
+
+	// Check for duplicate date
+	const duplicateDate = this.dailyTotals.some((total) => new Date(total.date).getTime() === date.getTime());
+
+	// If a duplicate date is found, throw an error
+	if (duplicateDate) {
+		throw new Error('A daily total already exists for this date.');
+	}
+
+	// Check if the date is valid and the required fields are present
+	const isValidTotal =
+		isValid(date) && dailyTotal.foodSales && dailyTotal.barSales && dailyTotal.nonCashTips && dailyTotal.cashTips;
+
+	// If the daily total is not valid, throw an error
+	if (!isValidTotal) {
+		throw new Error('Invalid daily total.');
+	}
+
+	// If the position is not 'server', set the potentialTipOuts to null
+	if (this.position.toLowerCase() !== 'server') {
+		dailyTotal.potentialTipOuts = null;
+	}
+
+	// If all checks pass, return the dailyTotal object
+	return dailyTotal;
 };
 
 TeamMemberSchema.index({ firstName: 1, lastName: 1, position: 1 }, { unique: true });
@@ -106,20 +172,19 @@ TeamMemberSchema.pre('remove', async function (next) {
 	next();
 });
 
-TeamMemberSchema.methods.calculateFoodTipOut = function(position, foodSales) {
-    return foodSales * (TIP_OUT_RATES[position] || 0);
+TeamMemberSchema.methods.calculateFoodTipOut = function (position, foodSales) {
+	return foodSales * (TIP_OUT_RATES[position] || 0);
 };
 
-TeamMemberSchema.methods.calculateBarTipOut = function(barSales) {
-    return barSales * TIP_OUT_RATES.bartender;
+TeamMemberSchema.methods.calculateBarTipOut = function (barSales) {
+	return barSales * TIP_OUT_RATES.bartender;
 };
 
-TeamMemberSchema.methods.updateTipOuts = async function(date, operation) {
+TeamMemberSchema.methods.updateTipOuts = async function (date, operation) {
 	const year = date.getUTCFullYear();
 	const month = date.getUTCMonth() + 1;
 
-	const servers = await this.model('TeamMember').find({
-		position: 'server',
+	const workers = await this.model('TeamMember').find({
 		workSchedule: {
 			$elemMatch: {
 				year: year,
@@ -133,42 +198,39 @@ TeamMemberSchema.methods.updateTipOuts = async function(date, operation) {
 		},
 	});
 
-	const foodTipOut = this.calculateFoodTipOut(this.position, servers.reduce((total, server) => total + server.foodSales, 0));
+	const servers = workers.filter((worker) => worker.position.toLowerCase() === 'server');
+	const hosts = workers.filter((worker) => worker.position.toLowerCase() === 'host');
+	const runners = workers.filter((worker) => worker.position.toLowerCase() === 'runner');
 
-	const update = {
-		$inc: {
-			[`${this.position}TipOuts`]: operation === 'add' ? foodTipOut : -foodTipOut,
+	const foodTipOut = servers.reduce((total, server) => {
+		const dailyTotal = server.dailyTotals.find((total) => total.date.getTime() === date.getTime());
+		return total + (dailyTotal ? dailyTotal.potentialTipOuts[this.position] : 0);
+	}, 0);
+
+	const updateServers = {
+		$set: {
+			hostTipOuts: this.position === 'host' ? foodTipOut : 0,
+			runnerTipOuts: this.position === 'runner' ? foodTipOut : 0,
 		},
 	};
 
-	await this.model('TeamMember').updateMany({ _id: { $in: servers.map(server => server._id) } }, update);
-
-	await this.model('TeamMember').findByIdAndUpdate(this._id, {
+	const updateHostsRunners = {
 		$inc: {
 			tipsReceived: operation === 'add' ? foodTipOut : -foodTipOut,
 		},
-	});
+	};
+
+	await this.model('TeamMember').updateMany({ _id: { $in: servers.map((server) => server._id) } }, updateServers);
+	await this.model('TeamMember').updateMany({ _id: { $in: hosts.map((host) => host._id) } }, updateHostsRunners);
+	await this.model('TeamMember').updateMany(
+		{ _id: { $in: runners.map((runner) => runner._id) } },
+		updateHostsRunners
+	);
 };
 
 TeamMemberSchema.methods.addDailyTotal = async function (dailyTotal) {
-	// Check if a daily total for the same date already exists
-	const existingEntry = this.dailyTotals.find(
-		(total) => total.date === dailyTotal.date
-	);
-
-	if (existingEntry) {
-		throw new Error('A daily total for this date already exists.');
-	}
-
-	if (this.position.toLowerCase() === 'server') {
-		dailyTotal.potentialTipOuts = {
-			host: dailyTotal.foodSales * TIP_OUT_RATES.host,
-			runner: dailyTotal.foodSales * TIP_OUT_RATES.runner,
-			bartender: dailyTotal.barSales * TIP_OUT_RATES.bartender,
-		};
-	}
-	// Calculate tipsReceived and totalPayrollTips
-	dailyTotal.tipsReceived = (dailyTotal.nonCashTips || 0) + (dailyTotal.cashTips || 0);
+	// Validate the daily total and get the validated dailyTotal
+	dailyTotal = this.validateDailyTotal(dailyTotal);
 
 	this.dailyTotals.push(dailyTotal);
 	this.markModified('dailyTotals');
@@ -188,18 +250,27 @@ TeamMemberSchema.statics.updateDailyTotal = function (teamMemberId, dailyTotalId
 	);
 };
 
-TeamMemberSchema.methods.removeDateFromWorkSchedule = function (date) {
-	const year = date.getFullYear();
-	const month = date.getMonth();
+TeamMemberSchema.methods.removeDailyTotal = function (dailyTotalId) {
+	const dailyTotal = this.dailyTotals.id(dailyTotalId);
+	if (!dailyTotal) {
+		throw new Error('No daily total found with this id');
+	}
+	
+	// Remove the date from the work schedule
+	this.removeDateFromWorkSchedule(dailyTotal.date);
 
-	const workScheduleItem = this.workSchedule.find(
-		(item) => item.year === year && item.month === month
-	);
+	dailyTotal.remove();
+	return this.save();
+};
+
+TeamMemberSchema.methods.removeDateFromWorkSchedule = function (date) {
+	const year = date.getUTCFullYear();
+	const month = date.getUTCMonth();
+
+	const workScheduleItem = this.workSchedule.find((item) => item.year === year && item.month === month);
 
 	if (workScheduleItem) {
-		const dateIndex = workScheduleItem.dates.findIndex(
-			(item) => item.getTime() === date.getTime()
-		);
+		const dateIndex = workScheduleItem.dates.findIndex((item) => item.getTime() === date.getTime());
 
 		if (dateIndex !== -1) {
 			workScheduleItem.dates.splice(dateIndex, 1);
@@ -215,17 +286,13 @@ TeamMemberSchema.methods.removeDateFromWorkSchedule = function (date) {
 };
 
 TeamMemberSchema.methods.addDateToWorkSchedule = function (date) {
-	const year = date.getFullYear();
-	const month = date.getMonth() + 1;
+	const year = date.getUTCFullYear();
+	const month = date.getUTCMonth() + 1;
 
-	let workScheduleItem = this.workSchedule.find(
-		(item) => item.year === year && item.month === month
-	);
+	let workScheduleItem = this.workSchedule.find((item) => item.year === year && item.month === month);
 
 	if (workScheduleItem) {
-		const hasDate = workScheduleItem.dates.some(
-			(existingDate) => existingDate.getTime() === date.getTime()
-		);
+		const hasDate = workScheduleItem.dates.some((existingDate) => existingDate.getTime() === date.getTime());
 
 		if (hasDate) {
 			throw new Error('The date already exists in the work schedule for this month.');
@@ -254,7 +321,7 @@ TeamMemberSchema.methods.getWeeklyTotals = function (weekStart) {
 	return weeklyTotal;
 };
 
-TeamMemberSchema.methods.getWorkScheduleForMonthAndYear = function (year, month) {
+TeamMemberSchema.methods.getWorkScheduleForYearAndMonth = function (year, month) {
 	return this.workSchedule.find((schedule) => schedule.month === month && schedule.year === year);
 };
 
@@ -263,5 +330,5 @@ const TeamMember = mongoose.model('TeamMember', TeamMemberSchema, 'teamMembers')
 TeamMember.ensureIndexes()
 	.then(() => console.log('Indexes ensured'))
 	.catch((err) => console.log('Error ensuring indexes:', err));
-	
+
 module.exports = TeamMember;

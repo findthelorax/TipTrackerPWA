@@ -7,7 +7,7 @@ router.get('/teamMembers/allWorkSchedules', WorkScheduleController.getAllWorkSch
 
 router.get('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.getWorkSchedule);
 router.get('/teamMembers/:teamId/workSchedule', WorkScheduleController.getWorkScheduleByTeam);
-router.get('/teamMembers/:teamMemberId/workSchedule/:year/:month', WorkScheduleController.getWorkScheduleForMonth);
+router.get('/teamMembers/:teamMemberId/workSchedule/:year/:month', WorkScheduleController.getWorkScheduleForYearAndMonth);
 
 
 // Create a new work schedule for a team member
