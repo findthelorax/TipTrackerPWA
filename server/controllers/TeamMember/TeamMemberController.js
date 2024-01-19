@@ -61,6 +61,13 @@ exports.createTeamMember = async (req, res, next) => {
 
 		const savedTeamMember = await newTeamMember.save();
 
+		for (const teamId of teams) {
+            await Team.updateOne(
+                { _id: teamId },
+                { $push: { teamMembers: savedTeamMember._id } }
+            );
+        }
+		
 		res.status(201).json(savedTeamMember);
 	} catch (err) {
 		next(err);

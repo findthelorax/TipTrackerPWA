@@ -84,12 +84,12 @@ exports.createWorkSchedule = async (req, res, next) => {
 			{ new: true }
 		);
 
-		if (['host', 'runner'].includes(updatedTeamMember.position.toLowerCase())) {
-			for (const workDate of workDates) {
-				const date = new Date(workDate);
-				await updatedTeamMember.updateTipOuts(date, 'add');
-			}
-		}
+		// if (['host', 'runner'].includes(updatedTeamMember.position.toLowerCase())) {
+		// 	for (const workDate of workDates) {
+		// 		const date = new Date(workDate);
+		// 		await updatedTeamMember.updateTipOuts(date, 'add');
+		// 	}
+		// }
 
 		res.json(updatedTeamMember);
 	} catch (err) {
@@ -104,14 +104,14 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 			return res.status(404).send();
 		}
 
-		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
-			for (const workSchedule of teamMember.workSchedule) {
-				for (const workDate of workSchedule.dates) {
-					const date = new Date(workDate);
-					await teamMember.updateTipOuts(date, 'remove');
-				}
-			}
-		}
+		// if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
+		// 	for (const workSchedule of teamMember.workSchedule) {
+		// 		for (const workDate of workSchedule.dates) {
+		// 			const date = new Date(workDate);
+		// 			await teamMember.updateTipOuts(date, 'remove');
+		// 		}
+		// 	}
+		// }
 
 		// Remove empty months
 		teamMember.workSchedule = [];
@@ -156,13 +156,15 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 exports.addDateToWorkSchedule = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
-		const workDate = parseISO(req.body.date);
+		const date = parseISO(req.body.date);
+		const year = date.getUTCFullYear();
+		const month = date.getUTCMonth() + 1;
 
-		teamMember.addDateToWorkSchedule(workDate);
+        teamMember.addDateToWorkSchedule(year, month, date);
 
-		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
-			await teamMember.updateTipOuts(workDate, 'add');
-		}
+		// if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
+		// 	await teamMember.updateTipOuts(workDate, 'add');
+		// }
 
 		teamMember.markModified('workSchedule');
 		await teamMember.save();
@@ -175,13 +177,16 @@ exports.addDateToWorkSchedule = async (req, res, next) => {
 exports.removeDateFromWorkSchedule = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
-		const workDate = parseISO(req.body.date);
+		const date = parseISO(req.body.date);
+		const year = date.getUTCFullYear();
+		const month = date.getUTCMonth() + 1;
 
-		teamMember.removeDateFromWorkSchedule(workDate);
 
-		if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
-			await teamMember.updateTipOuts(workDate, 'remove');
-		}
+        teamMember.removeDateFromWorkSchedule(year, month, date);
+
+		// if (['host', 'runner'].includes(teamMember.position.toLowerCase())) {
+		// 	await teamMember.updateTipOuts(workDate, 'remove');
+		// }
 
 		teamMember.markModified('workSchedule');
 		await teamMember.save();
