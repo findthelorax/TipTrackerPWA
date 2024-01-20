@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const WeeklyTotalController = require('../controllers/TeamMember/WeeklyTotalController');
 
-// WeeklyTotal Routes
 router.get('/teamMembers/:teamMemberId/weeklyTotals/', WeeklyTotalController.getOneTMWeeklyTotals);
 router.get('/teamMembers/:teamMemberId/weeklyTotals/:week', WeeklyTotalController.getOneWeeklyTotals);
 

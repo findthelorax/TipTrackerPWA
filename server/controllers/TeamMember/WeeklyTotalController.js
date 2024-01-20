@@ -1,7 +1,6 @@
 const { TeamMember } = require('../../models/DatabaseModel');
 require('dotenv').config();
 
-// Get All Weekly Totals
 exports.getAllWeeklyTotals = async (req, res, next) => {
 	try {
 		const teamMembers = await TeamMember.find({});
@@ -13,7 +12,6 @@ exports.getAllWeeklyTotals = async (req, res, next) => {
 	}
 };
 
-// Get weekly totals
 exports.getWeeklyTotals = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.id);
@@ -28,8 +26,6 @@ exports.getWeeklyTotals = async (req, res, next) => {
 	}
 };
 
-
-// Route to get all weekly totals for a specific team member
 exports.getOneTMWeeklyTotals = async (req, res, next) => {
 	try {
 		const { teamMemberId } = req.params;
@@ -44,7 +40,6 @@ exports.getOneTMWeeklyTotals = async (req, res, next) => {
 	}
 };
 
-// Route to get a specific team member's weekly totals for a specific week
 exports.getOneWeeklyTotals = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
@@ -53,7 +48,6 @@ exports.getOneWeeklyTotals = async (req, res, next) => {
 			return res.status(404).json({ message: 'Team member not found' });
 		}
 
-		// Parse the week parameter into a Date object
 		const weekStart = moment(req.params.week);
 
 		const weeklyTotal = teamMember.getWeeklyTotals(weekStart);
@@ -68,7 +62,6 @@ exports.getOneWeeklyTotals = async (req, res, next) => {
 	}
 };
 
-// Route to create a specific team member's weekly totals for a specific week
 exports.createWeeklyTotals = async (req, res, next) => {
 	try {
 		const memberId = req.params.teamMemberId;
@@ -111,7 +104,6 @@ exports.updateWeeklyTotalsPut = async (req, res, next) => {
 			return res.status(404).json({ message: 'Team member not found' });
 		}
 
-		// Create a new date using moment and set it to the start of the week
 		const weekStartLocal = moment().local().startOf('week').toDate();
 		const weekStart = moment().startOf('week').toDate();
 
@@ -134,11 +126,9 @@ exports.updateWeeklyTotalsPut = async (req, res, next) => {
 
 exports.updateWeeklyTotalsPatch = async (req, res, next) => {
 	try {
-		// Parse the date string from the client using moment
 		const weekStartLocal = moment(req.params.week).local().startOf('day').toDate();
 		const weekStart = moment(req.params.week).startOf('week').toDate();
 
-		// Check for existing weekly total for the same week
 		const existingWeeklyTotal = await TeamMember.findOne({
 			_id: req.params.teamMemberId,
 			'weeklyTotals.week': weekStart,

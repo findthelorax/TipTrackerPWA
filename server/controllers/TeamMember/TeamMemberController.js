@@ -109,7 +109,6 @@ exports.deleteTeamMember = async (req, res, next) => {
 		});
 	}
 	try {
-		// Remove the team member from their teams
 		for (const teamId of teamMember.teams) {
 			await Team.updateOne(
 				{ _id: teamId },

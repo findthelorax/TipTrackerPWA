@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const DailyTotalController = require('../controllers/TeamMember/DailyTotalController');
 
-// DailyTotal Routes
 router.get('/teamMembers/:teamMemberId/dailyTotals', DailyTotalController.getDailyTotals);
 router.get('/teamMembers/:teamMemberId/:dailyTotalId', DailyTotalController.getDailyTotal);
 

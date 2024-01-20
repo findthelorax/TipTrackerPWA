@@ -4,20 +4,14 @@ const Team = require('./TeamModel');
 const { startOfWeek, endOfWeek, isSameOrAfter, isSameOrBefore, isValid } = require('date-fns');
 const DailyTotalSchema = require('./DailyTotalSchema');
 const WeeklyTotalSchema = require('./WeeklyTotalSchema');
-const { updateTipOuts } = require('../utils/teamMemberUtils');
+const WorkScheduleSchema = require('./WorkScheduleSchema');
 
 const TeamMemberSchema = new mongoose.Schema({
 	firstName: String,
 	lastName: String,
 	position: String,
 	teams: [{ type: Schema.Types.ObjectId, ref: 'Team' }],
-	workSchedule: [
-		{
-			year: Number,
-			month: Number,
-			dates: [Date],
-		},
-	],
+    workSchedule: [WorkScheduleSchema],
 	dailyTotals: [DailyTotalSchema],
 	weeklyTotals: [WeeklyTotalSchema],
 });
@@ -45,34 +39,25 @@ TeamMemberSchema.pre('remove', async function (next) {
 
 TeamMemberSchema.methods.validateDailyTotal = function (dailyTotal) {
 	const date = new Date(dailyTotal.date);
-
-	// Check for duplicate date
 	const duplicateDate = this.dailyTotals.some((total) => new Date(total.date).getTime() === date.getTime());
 
-	// If a duplicate date is found, throw an error
 	if (duplicateDate) {
 		throw new Error('A daily total already exists for this date.');
 	}
 
-	// Check if the date is valid and the required fields are present
 	const isValidTotal =
 		isValid(date) && dailyTotal.foodSales && dailyTotal.barSales && dailyTotal.nonCashTips && dailyTotal.cashTips;
 
-	// If the daily total is not valid, throw an error
 	if (!isValidTotal) {
 		throw new Error('Invalid daily total.');
 	}
 
-	// If the position is not 'server', set the potentialTipOuts to null
 	if (this.position.toLowerCase() !== 'server') {
 		dailyTotal.potentialTipOuts = null;
 	}
 
-	// If all checks pass, return the dailyTotal object
 	return dailyTotal;
 };
-
-TeamMemberSchema.methods.updateTipOuts = updateTipOuts;
 
 TeamMemberSchema.methods.addDailyTotal = async function (dailyTotal) {
 	// Validate the daily total and get the validated dailyTotal
@@ -110,15 +95,7 @@ TeamMemberSchema.methods.addDateToWorkSchedule = function (year, month, date) {
 		return item.year === year && item.month === month;
 	});
 	if (workScheduleItem) {
-		const hasDate = workScheduleItem.dates.some((existingDate) => {
-			return existingDate.getTime() === date.getTime();
-		});
-		if (hasDate) {
-			throw new Error('The date already exists in the work schedule for this month.');
-		} else {
-			workScheduleItem.dates.push(date);
-			workScheduleItem.dates.sort((a, b) => a - b);
-		}
+		workScheduleItem.addDate(date);
 	} else {
 		this.workSchedule.push({
 			year: year,
@@ -135,11 +112,7 @@ TeamMemberSchema.methods.removeDateFromWorkSchedule = function (year, month, dat
 	const workScheduleItem = this.workSchedule.find((item) => item.year === year && item.month === month);
 
 	if (workScheduleItem) {
-		const dateIndex = workScheduleItem.dates.findIndex((item) => item.getTime() === date.getTime());
-
-		if (dateIndex !== -1) {
-			workScheduleItem.dates.splice(dateIndex, 1);
-		}
+		workScheduleItem.removeDate(date);
 
 		if (workScheduleItem.dates.length === 0) {
 			this.workSchedule.pull(workScheduleItem);
