@@ -15,16 +15,19 @@ async function findTeamMembers(team, year, month, date) {
 	// For each teamMember, get the dailyTotal that matches the date
 	const teamMembersWithDailyTotal = await Promise.all(
 		teamMembers.map(async (teamMember) => {
-			const teamMemberWithDailyTotal = await TeamMember.findOne(
+			return await TeamMember.findOne(
 				{ _id: teamMember._id, 'dailyTotals.year': year, 'dailyTotals.month': month, 'dailyTotals.date': date },
 				{ position: 1, 'dailyTotals.$': 1 } // Fetch position and the first matching dailyTotal
 			);
-
-			return teamMemberWithDailyTotal;
 		})
 	);
 
-	return teamMembersWithDailyTotal;
+	// Return an object that includes both the team members and their positions
+	return {
+		teamMembers: teamMembersWithDailyTotal,
+		positions: separateMembersByPosition(teamMembersWithDailyTotal),
+		positionCounts: countPositions(teamMembersWithDailyTotal),
+	};
 }
 
 function separateMembersByPosition(members) {
@@ -123,38 +126,35 @@ exports.createDailyTotal = async (req, res, next) => {
 		await teamMember.addDailyTotal(dailyTotal);
 		await teamMember.save();
 
-		const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(team, year, month, date);
-		const membersByPosition = separateMembersByPosition(teamMembersOnSameTeamYearMonthAndDate);
+        const { teamMembers, positions, positionCounts } = await findTeamMembers(team, year, month, date);
+        console.log("🚀 ~ file: DailyTotalController.js:130 ~ exports.createDailyTotal= ~ positionCounts:", positionCounts)
 
-		const bartenders = membersByPosition.bartender;
-		const servers = membersByPosition.server;
-		const runners = membersByPosition.runner;
-		const hosts = membersByPosition.host;
+        const bartenders = positions.bartender;
+        const servers = positions.server;
+        const runners = positions.runner;
+        const hosts = positions.host;
 
-		const positionCounts = countPositions(teamMembersOnSameTeamYearMonthAndDate);
-		console.log('🚀 ~ positionCounts ~ positionCounts:', positionCounts);
+        // Find the current server in the servers array
+        const currentServer = servers.find(server => server._id.toString() === teamMemberId);
+        console.log("🚀 ~ file: DailyTotalController.js:141 ~ exports.createDailyTotal= ~ currentServer:", currentServer)
+        if (!currentServer) {
+            throw new Error('Current server not found in servers array');
+        }
 
-		// Find the current server in the servers array
-		const currentServer = servers.find((server) => server._id.toString() === teamMemberId);
-		console.log("🚀 ~ file: DailyTotalController.js:139 ~ exports.createDailyTotal= ~ currentServer:", currentServer)
-		if (!currentServer) {
-			throw new Error('Current server not found in servers array');
-		}
-
-		// Get the daily total of the current server
-		const currentServerDailyTotal = currentServer.dailyTotals[0];
-		if (!currentServerDailyTotal) {
-			throw new Error('Current server does not have a daily total');
-		}
+        // Get the daily total of the current server
+        const currentServerDailyTotal = currentServer.dailyTotals[0];
+        if (!currentServerDailyTotal) {
+            throw new Error('Current server does not have a daily total');
+        }
 
 		// Based on the position of the teamMember whose dailyTotal is being added, perform the necessary logic
 
-		// Logic for when a server's dailyTotal is added
-		if (position === 'server') {
-			await handleServerLogic(servers, bartenders, runners, hosts);
-		} else if (position === 'bartender') {
-			await handleBartenderLogic(bartenders, servers);
-		}
+        // Logic for when a server's dailyTotal is added
+        if (position === 'server') {
+            await handleServerLogic(currentServer._id, currentServerDailyTotal, servers, bartenders, runners, hosts);
+        } else if (position === 'bartender') {
+            await handleBartenderLogic(bartenders, servers);
+        }
 
 		await teamMember.save();
 

@@ -1,12 +1,4 @@
-const { TIP_OUT_RATES } = require('./constants');
-
-function calculateFoodTipOut(position, foodSales) {
-    return foodSales * (TIP_OUT_RATES[position] || 0);
-}
-
-function calculateBarTipOut(barSales) {
-    return barSales * TIP_OUT_RATES.bartender;
-}
+const mongoose = require('mongoose');
 
 async function updateTipOuts(date, operation) {
 	const year = date.getUTCFullYear();
@@ -64,10 +56,6 @@ async function handleServerLogic(server, bartenders, runners, hosts) {
 	if (runners.length > 0) serverDailyTotal.runnerTipOuts = serverDailyTotal.potentialTipOuts.runner;
 	if (hosts.length > 0) serverDailyTotal.hostTipOuts = serverDailyTotal.potentialTipOuts.host;
 
-	serverDailyTotal.barTipOuts = serverDailyTotal.barTipOuts || 0;
-    serverDailyTotal.runnerTipOuts = serverDailyTotal.runnerTipOuts || 0;
-    serverDailyTotal.hostTipOuts = serverDailyTotal.hostTipOuts || 0;
-
 	// Calculate totalTipOut and tipsReceived
 	serverDailyTotal.totalTipOut =
 		serverDailyTotal.barTipOuts + serverDailyTotal.runnerTipOuts + serverDailyTotal.hostTipOuts;
@@ -83,10 +71,7 @@ async function handleServerLogic(server, bartenders, runners, hosts) {
 	await server.save(); 
 }
 
-async function handleBartenderLogic(bartender, servers, bartenders) {
-console.log("🚀 ~ handleBartenderLogic ~ servers:", servers)
-console.log("🚀 ~ handleBartenderLogic ~ bartenders:", bartenders)
-console.log("🚀 ~ handleBartenderLogic ~ bartender:", bartender)
+async function handleBartenderLogic(bartenders, servers) {
 
     // Update the barTipOuts for each server
     await updateBarTipOuts(servers);
@@ -98,36 +83,34 @@ console.log("🚀 ~ handleBartenderLogic ~ bartender:", bartender)
     );
     console.log("🚀 ~ handleBartenderLogic ~ totalBarTipOut:", totalBarTipOut)
 
-    const allBartenders = [...bartenders, bartender];
-    console.log("🚀 ~ handleBartenderLogic ~ allBartenders:", allBartenders)
-    await distributeTips(allBartenders, totalBarTipOut);
+    await distributeTips.call(this, bartenders, totalBarTipOut);
 }
 
 async function updateBarTipOuts(servers) {
     for (let server of servers) {
-
-        // Update the barTipOuts for each server
-        server.dailyTotals[0].barTipOuts = calculateBarTipOuts(server);
-        await server.save();
+        const dailyTotal = server.dailyTotals[0];
+        dailyTotal.barTipOuts = dailyTotal.potentialTipOuts.bartender;
+        await mongoose.model('TeamMember').updateOne(
+            { _id: server._id, 'dailyTotals.date': dailyTotal.date },
+            { $set: { 'dailyTotals.$': dailyTotal } }
+        );
     }
 }
 
 async function distributeTips(members, totalTipOut) {
-	console.log("🚀 ~ distributeTips ~ members:", members)
-	const splitTipOut = totalTipOut / members.length;
-	for (let member of members) {
-		const memberDailyTotal = member.dailyTotals;
-		if (!memberDailyTotal) continue;
-
-		memberDailyTotal.tipsReceived += splitTipOut;
-		memberDailyTotal.totalPayrollTips = memberDailyTotal.tipsReceived - memberDailyTotal.totalTipOut;
-		await member.save();
-	}
+    const splitTipOut = totalTipOut / members.length;
+    for (let member of members) {
+        const memberDailyTotal = member.dailyTotals[0];
+        memberDailyTotal.tipsReceived += splitTipOut;
+        memberDailyTotal.totalPayrollTips = memberDailyTotal.tipsReceived - memberDailyTotal.totalTipOut;
+        await mongoose.model('TeamMember').updateOne(
+            { _id: member._id, 'dailyTotals.date': memberDailyTotal.date },
+            { $set: { 'dailyTotals.$': memberDailyTotal } }
+        );
+    }
 }
 
 module.exports = {
-    calculateFoodTipOut,
-    calculateBarTipOut,
     updateTipOuts,
     handleServerLogic,
     handleBartenderLogic,

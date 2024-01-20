@@ -4,7 +4,7 @@ const Team = require('./TeamModel');
 const { startOfWeek, endOfWeek, isSameOrAfter, isSameOrBefore, isValid } = require('date-fns');
 const DailyTotalSchema = require('./DailyTotalSchema');
 const WeeklyTotalSchema = require('./WeeklyTotalSchema');
-const { calculateFoodTipOut, calculateBarTipOut, updateTipOuts } = require('../utils/teamMemberUtils');
+const { updateTipOuts } = require('../utils/teamMemberUtils');
 
 const TeamMemberSchema = new mongoose.Schema({
 	firstName: String,
@@ -72,8 +72,6 @@ TeamMemberSchema.methods.validateDailyTotal = function (dailyTotal) {
 	return dailyTotal;
 };
 
-TeamMemberSchema.methods.calculateFoodTipOut = calculateFoodTipOut;
-TeamMemberSchema.methods.calculateBarTipOut = calculateBarTipOut;
 TeamMemberSchema.methods.updateTipOuts = updateTipOuts;
 
 TeamMemberSchema.methods.addDailyTotal = async function (dailyTotal) {
