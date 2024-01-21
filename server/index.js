@@ -12,12 +12,13 @@ const weeklyTotalRoutes = require('./routes/WeeklyTotalRoutes');
 require('dotenv').config();
 
 const app = express();
+const IP = process.env.IP;
 const BPORT = process.env.BACKEND_PORT;
 const FPORT = process.env.FRONTEND_PORT;
-const IP = process.env.IP;
+const DBNAME = process.env.DB_NAME;
 
 mongoose
-	.connect(process.env.MONGODB_URL)
+	.connect(`${process.env.MONGODB_URL}/${DBNAME}`)
 	.then(() => console.log('MongoDB connected'))
 	.catch((err) => console.error(err));
 
