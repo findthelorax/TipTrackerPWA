@@ -1,14 +1,12 @@
-const { TeamMember } = require('../../models/DatabaseModel');
-const { Team } = require('../../models/DatabaseModel');
+const { Team, TeamMember } = require('../../models/DatabaseModel');
 require('dotenv').config();
 
-// Get All Team Members
 exports.getTeamMembers = async (req, res, next) => {
 	try {
 		const teamMembers = await TeamMember.find();
 		res.json(teamMembers);
 	} catch (err) {
-        next(error);
+        next(err);
 	}
 };
 
@@ -33,7 +31,7 @@ exports.getTeamMember = async (req, res, next) => {
 			data: teamMember,
 		});
 	} catch (err) {
-        next(error);
+        next(err);
 	}
 };
 
@@ -116,13 +114,12 @@ exports.deleteTeamMember = async (req, res, next) => {
 			);
 		}
 
-		// Delete the team member
 		const deleted = await TeamMember.findByIdAndDelete(teamMemberId);
 		if (!deleted) throw new Error('Deletion failed');
 		res.json({
 			message: `Team member ${teamMember.firstName} ${teamMember.lastName} (${teamMember.position}) was deleted`,
 		});
-	} catch (error) {
-        next(error);
+	} catch (err) {
+        next(err);
 	}
 };

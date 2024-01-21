@@ -105,8 +105,11 @@ async function handlePositionLogic(servers, positionMembers, position) {
 
 async function handleServerAddedLogic(servers, bartenders, runners, hosts) {
     const totalBartenderTipOut = servers.reduce((total, server) => total + server.dailyTotals[0].bartenderTipOuts, 0);
+    console.log("🚀 ~ file: teamMemberUtils.js:108 ~ handleServerAddedLogic ~ totalBartenderTipOut:", totalBartenderTipOut)
     const totalRunnerTipOut = servers.reduce((total, server) => total + server.dailyTotals[0].runnerTipOuts, 0);
+    console.log("🚀 ~ file: teamMemberUtils.js:110 ~ handleServerAddedLogic ~ totalRunnerTipOut:", totalRunnerTipOut)
     const totalHostTipOut = servers.reduce((total, server) => total + server.dailyTotals[0].hostTipOuts, 0);
+    console.log("🚀 ~ file: teamMemberUtils.js:112 ~ handleServerAddedLogic ~ totalHostTipOut:", totalHostTipOut)
 
     await distributeTips.call(this, bartenders, totalBartenderTipOut);
     await distributeTips.call(this, runners, totalRunnerTipOut);

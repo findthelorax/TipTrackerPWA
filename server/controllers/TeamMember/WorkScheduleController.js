@@ -117,8 +117,6 @@ exports.createWorkSchedule = async (req, res, next) => {
 
 		teamMember.workSchedule = workSchedule;
 		await teamMember.save();
-
-		res.json(teamMember);
 	} catch (err) {
 		next(err);
 	}
@@ -149,8 +147,6 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 			const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(null, teamMember.teams, year, month, date);
 			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMember.position.toLowerCase());
 		}
-
-		res.json(teamMember);
 	} catch (err) {
 		next(err);
 	}
@@ -182,8 +178,6 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 			teamMember.workSchedule.splice(workScheduleIndex, 1);
 			await teamMember.save();
 		}
-
-		res.json(teamMember);
 	} catch (err) {
 		next(err);
 	}
@@ -215,8 +209,6 @@ exports.addDateToWorkSchedule = async (teamMember, dailyTotal) => {
 			teamMember.markModified('workSchedule');
 			await teamMember.save();
 		}
-
-		res.json(teamMember);
 	} catch (err) {
 		next(err);
 	}
@@ -238,8 +230,6 @@ exports.removeDateFromWorkSchedule = async (teamMember, dailyTotal) => {
 
 		teamMember.markModified('workSchedule');
 		await teamMember.save();
-
-		res.json(teamMember);
 	} catch (err) {
 		next(err);
 	}

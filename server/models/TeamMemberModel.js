@@ -24,7 +24,7 @@ const TeamMemberSchema = new mongoose.Schema({
 	teams: [{ type: Schema.Types.ObjectId, ref: 'Team' }],
     workSchedule: [WorkScheduleSchema],
 	dailyTotals: [DailyTotalSchema],
-	weeklyTotals: [WeeklyTotalSchema],
+	weeklyTotals: [{ type: Schema.Types.ObjectId, ref: 'WeeklyTotal' }],
 });
 
 TeamMemberSchema.index({ firstName: 1, lastName: 1, position: 1 }, { unique: true });

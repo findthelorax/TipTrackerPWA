@@ -4,6 +4,7 @@ const WorkScheduleSchema = new mongoose.Schema({
     year: Number,
     month: Number,
     dates: [Date],
+    teamMember: { type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' },
 });
 
 WorkScheduleSchema.methods.addDate = function (date) {

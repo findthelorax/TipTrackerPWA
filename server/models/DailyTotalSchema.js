@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { TIP_OUT_RATES } = require('../utils/constants');
 
 const DailyTotalSchema = new mongoose.Schema({
+	teamMember: { type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' },
 	year: Number,
 	month: Number,
 	date: Date,
