@@ -6,6 +6,17 @@ const DailyTotalSchema = require('./DailyTotalSchema');
 const WeeklyTotalSchema = require('./WeeklyTotalSchema');
 const WorkScheduleSchema = require('./WorkScheduleSchema');
 
+//! TODO: 
+// const TeamMemberSchema = new mongoose.Schema({
+//     firstName: String,
+//     lastName: String,
+//     position: String,
+//     teams: [{ type: Schema.Types.ObjectId, ref: 'Team' }],
+//     workSchedule: [WorkScheduleSchema],
+//     dailyTotals: [{ type: Schema.Types.ObjectId, ref: 'DailyTotal' }],
+//     weeklyTotals: [{ type: Schema.Types.ObjectId, ref: 'WeeklyTotal' }],
+// });
+
 const TeamMemberSchema = new mongoose.Schema({
 	firstName: String,
 	lastName: String,

@@ -23,7 +23,7 @@ mongoose
 
 app.use(
 	cors({
-		origin: `${IP}:${FPORT}`, // replace with the origin of the client
+		origin: `${IP}:${FPORT}`,
 		credentials: true,
 	})
 );

@@ -115,6 +115,7 @@ async function handleServerAddedLogic(servers, bartenders, runners, hosts) {
 
 exports.handleDailyTotalLogic = async function (teamMembers) {
 	const positions = separateMembersByPosition(teamMembers);
+	console.log("🚀 ~ positions:", positions)
 
 	for (const position in positions) {
 		if (position === 'server') {
