@@ -4,7 +4,7 @@ const Team = require('./TeamModel');
 // const { User } = require('./user');
 require('dotenv').config();
 
-const db = mongoose.createConnection(process.env.MONGODB_URL);
+const db = mongoose.createConnection(process.env.MONGODB);
 
 // const UserModel = db.model('User', User.schema, 'users');
 const TeamModel = db.model('Team', Team.schema, 'teams');

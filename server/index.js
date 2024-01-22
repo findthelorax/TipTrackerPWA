@@ -1,7 +1,13 @@
 const express = require('express');
-const mongoose = require('mongoose');
+require('dotenv').config();
 const cors = require('cors');
 // const session = require('express-session');
+
+const app = express();
+const IP = process.env.IP;
+const BPORT = process.env.PORT;
+const FPORT = process.env.FRONTEND_PORT;
+
 const errorHandler = require('./middleware/errorHandler');
 const teamMembersRoutes = require('./routes/TeamMemberRoutes');
 const teamRoutes = require('./routes/TeamRoutes');
@@ -9,18 +15,10 @@ const workRoutes = require('./routes/WorkScheduleRoutes');
 const dailyTotalRoutes = require('./routes/DailyTotalRoutes');
 const weeklyTotalRoutes = require('./routes/WeeklyTotalRoutes');
 
-require('dotenv').config();
+const { db } = require('./utils/db');
 
-const app = express();
-const IP = process.env.IP;
-const BPORT = process.env.BACKEND_PORT;
-const FPORT = process.env.FRONTEND_PORT;
-const DBNAME = process.env.DB_NAME;
+db().catch((err) => console.error(err));
 
-mongoose
-	.connect(`${process.env.MONGODB_URL}/${DBNAME}`)
-	.then(() => console.log('MongoDB connected'))
-	.catch((err) => console.error(err));
 
 app.use(
 	cors({

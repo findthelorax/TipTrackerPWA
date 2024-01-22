@@ -214,3 +214,40 @@ exports.updateDailyTotal = async (req, res, next) => {
 		next(error);
 	}
 };
+
+exports.createDailyTotal = async (req, res, next) => {
+    try {
+        const { teamMemberId } = req.params;
+        const dailyTotal = req.body;
+
+        const teamMember = await TeamMember.findById(teamMemberId);
+        if (!teamMember) {
+            return res.status(404).json({ message: 'Team member not found' });
+        }
+
+        const teamMemberPosition = teamMember.position.toLowerCase();
+        const teamMemberTeam = teamMember.teams;
+
+        const dailyTotalDate = parseISO(dailyTotal.date);
+        const dailyTotalYear = date.getUTCFullYear();
+        const dailyTotalMonth = date.getUTCMonth() + 1;
+
+        await teamMember.addDailyTotal(dailyTotal);
+        teamMember.addDateToWorkSchedule(year, month, date);
+
+        const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(teamMemberTeam, dailyTotalYear, dailyTotalMonth, dailyTotalDate, teamMemberId);
+
+        const positionCounts = countPositions(teamMembersOnSameTeamYearMonthAndDate);
+        console.log('🚀 ~ positionCounts ~ positionCounts:', positionCounts);
+
+        await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
+        await teamMember.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Daily totals submitted successfully',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
