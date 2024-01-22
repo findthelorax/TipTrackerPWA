@@ -1,4 +1,4 @@
-const { TeamMember } = require('../../models/DatabaseModel');
+const TeamMember = require('../../models/TeamMemberModel');
 require('dotenv').config();
 const { handleDailyTotalLogic } = require('../../utils/teamMemberUtils');
 const { addDateToWorkSchedule, removeDateFromWorkSchedule } = require('../TeamMember/WorkScheduleController');

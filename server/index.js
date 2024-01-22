@@ -7,6 +7,7 @@ const app = express();
 const IP = process.env.IP;
 const BPORT = process.env.PORT;
 const FPORT = process.env.FRONTEND_PORT;
+const { MONGODB, DB_NAME } = process.env;
 
 const errorHandler = require('./middleware/errorHandler');
 const teamMembersRoutes = require('./routes/TeamMemberRoutes');
@@ -15,10 +16,13 @@ const workRoutes = require('./routes/WorkScheduleRoutes');
 const dailyTotalRoutes = require('./routes/DailyTotalRoutes');
 const weeklyTotalRoutes = require('./routes/WeeklyTotalRoutes');
 
-const { db } = require('./utils/db');
+const db = require('./utils/db');
 
-db().catch((err) => console.error(err));
-
+db()
+    .then(() => {
+        console.log(`Database connected to: ${MONGODB}/${DB_NAME}`);
+    })
+    .catch((err) => console.error(err));
 
 app.use(
 	cors({

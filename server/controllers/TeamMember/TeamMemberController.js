@@ -1,4 +1,5 @@
-const { Team, TeamMember } = require('../../models/DatabaseModel');
+const Team = require('../../models/TeamModel');
+const TeamMember = require('../../models/TeamMemberModel');
 require('dotenv').config();
 
 exports.getTeamMembers = async (req, res, next) => {

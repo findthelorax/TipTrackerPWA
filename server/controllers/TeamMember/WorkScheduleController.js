@@ -1,4 +1,4 @@
-const { TeamMember } = require('../../models/DatabaseModel');
+const TeamMember = require('../../models/TeamMemberModel');
 const { parseISO } = require('date-fns');
 require('dotenv').config();
 const { handleDailyTotalLogic } = require('../../utils/teamMemberUtils');
