@@ -4,28 +4,32 @@ require('dotenv').config();
 const { handleDailyTotalLogic } = require('../../utils/teamMemberUtils');
 
 async function findTeamMembers(currentTeamMemberId, team, year, month, date) {
-	const teamMembers = await TeamMember.find({
-		teams: team,
-		'workSchedule.year': year,
-		'workSchedule.month': month,
-		'workSchedule.dates': date,
+    const teamMembers = await TeamMember.find({
+        teams: team,
+        workSchedule: {
+            $elemMatch: {
+                year: year,
+                month: month,
+                dates: date,
+            }
+        }
+    });
+
+	const teamMembersWithDailyTotal = teamMembers.map((teamMember) => {
+		const dailyTotalsForDate = teamMember.dailyTotals.filter((dailyTotal) => {
+			// Convert both dates to 'YYYY-MM-DD' format for comparison
+			const dailyTotalDate = new Date(dailyTotal.date).toISOString().split('T')[0];
+			const queryDate = date.toISOString().split('T')[0];
+
+			return dailyTotalDate === queryDate;
+		});
+
+		return {
+			_id: teamMember._id,
+			position: teamMember.position,
+			dailyTotals: dailyTotalsForDate,
+		};
 	});
-
-	const teamMembersWithDailyTotal = await Promise.all(
-		teamMembers.map(async (teamMember) => {
-			const teamMemberWithDailyTotal = await TeamMember.findOne(
-				{ _id: teamMember._id, 'dailyTotals.year': year, 'dailyTotals.month': month, 'dailyTotals.date': date },
-				{ position: 1, 'dailyTotals.$': 1 } // Fetch position and the first matching dailyTotal
-			);
-
-			if (teamMember._id.toString() === currentTeamMemberId) {
-				teamMemberWithDailyTotal.isCurrentTeamMember = true;
-			}
-
-			return teamMemberWithDailyTotal;
-		})
-	);
-
 	return teamMembersWithDailyTotal;
 }
 
@@ -54,7 +58,7 @@ exports.getAllWorkSchedules = async (req, res, next) => {
 	}
 };
 
-exports.getWorkSchedule = async (req, res) => {
+exports.getWorkSchedule = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 		res.json({ workSchedule: teamMember.workSchedule });
@@ -63,7 +67,7 @@ exports.getWorkSchedule = async (req, res) => {
 	}
 };
 
-exports.getWorkScheduleForYearAndMonth = async (req, res) => {
+exports.getWorkScheduleForYearAndMonth = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
 		const year = parseInt(req.params.year, 10);
@@ -84,7 +88,51 @@ exports.getWorkScheduleByTeam = async (req, res, next) => {
 		const workSchedules = teamMembers.flatMap((teamMember) => teamMember.workSchedule);
 		res.json(workSchedules);
 	} catch (err) {
-		console.error(`Error getting work schedules: ${error.message}`);
+		console.error(`Error getting work schedules: ${err.message}`);
+		next(err);
+	}
+};
+
+exports.addWorkDate = async (req, res, next) => {
+    const teamMemberId = req.params.teamMemberId;
+    const date = req.body.date;
+	
+	const dateISO = parseISO(date);
+	const year = dateISO.getUTCFullYear();
+	const month = dateISO.getUTCMonth() + 1;
+	
+    try {
+		const teamMember = await TeamMember.findById(teamMemberId);
+        if (!teamMember) {
+			return res.status(404).send({ message: 'Team member not found' });
+        }
+		const teamMemberPosition = teamMember.position.toLowerCase();
+		
+        await exports.addDateToWorkSchedule(teamMember, { date }, next);
+		const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(teamMember._id, teamMember.teams, year, month, dateISO);
+		await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
+
+		teamMember.markModified('workSchedule');
+		await teamMember.save();
+        res.status(200).send({ message: 'Date added to work schedule' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.removeWorkDate = async (req, res, next) => {
+	const teamMemberId = req.params.teamMemberId;
+	const date = req.body.date;
+
+	try {
+		const teamMember = await TeamMember.findById(teamMemberId);
+		if (!teamMember) {
+			return res.status(404).send({ message: 'Team member not found' });
+		}
+
+		await exports.removeDateFromWorkSchedule(teamMember, { date }, next);
+		res.status(200).send({ message: 'Date removed from work schedule' });
+	} catch (err) {
 		next(err);
 	}
 };
@@ -94,6 +142,7 @@ exports.createWorkSchedule = async (req, res, next) => {
 		const workDates = req.body.workSchedule;
 		const workSchedule = [];
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const teamMemberPosition = teamMember.position.toLowerCase();
 
 		for (const workDate of workDates) {
 			const date = new Date(workDate);
@@ -112,7 +161,7 @@ exports.createWorkSchedule = async (req, res, next) => {
 
 			// Recalculate tipOuts
 			const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(teamMember._id, teamMember.teams, year, month, date);
-			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMember.position.toLowerCase());
+			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
 		}
 
 		teamMember.workSchedule = workSchedule;
@@ -125,6 +174,7 @@ exports.createWorkSchedule = async (req, res, next) => {
 exports.deleteWorkSchedule = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const teamMemberPosition = teamMember.position.toLowerCase();
 		if (!teamMember) {
 			return res.status(404).send();
 		}
@@ -145,7 +195,7 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 		// Recalculate tipOuts for each date in the team member's work schedule
 		for (const { date, year, month } of dates) {
 			const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(null, teamMember.teams, year, month, date);
-			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMember.position.toLowerCase());
+			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
 		}
 	} catch (err) {
 		next(err);
@@ -155,6 +205,7 @@ exports.deleteWorkSchedule = async (req, res, next) => {
 exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 	try {
 		const teamMember = await TeamMember.findById(req.params.teamMemberId);
+		const teamMemberPosition = teamMember.position.toLowerCase();
 		const year = parseInt(req.params.year, 10);
 		const month = parseInt(req.params.month, 10);
 
@@ -172,7 +223,7 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 			// Recalculate tipOuts for each date in the work schedule
 			for (const date of workSchedule.dates) {
 				const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(teamMember._id, teamMember.teams, year, month, date);
-				await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMember.position.toLowerCase());
+				await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
 			}
 
 			teamMember.workSchedule.splice(workScheduleIndex, 1);
@@ -183,7 +234,7 @@ exports.deleteWorkScheduleForMonth = async (req, res, next) => {
 	}
 };
 
-exports.addDateToWorkSchedule = async (teamMember, dailyTotal) => {
+exports.addDateToWorkSchedule = async (teamMember, dailyTotal, next) => {
 	try {
 		const teamMemberPosition = teamMember.position.toLowerCase();
 		const teamMemberTeam = teamMember.teams;
@@ -199,11 +250,21 @@ exports.addDateToWorkSchedule = async (teamMember, dailyTotal) => {
 			schedule.dates.some(d => d.getTime() === date.getTime())
 		);
 
+		if (dateExists) {
+            return next(new Error('Date already exists in work schedule'));
+        }
+
 		// If the date doesn't exist, add it and recalculate the tipOuts
 		if (!dateExists) {
-			teamMember.addDateToWorkSchedule(year, month, date);
-
+			await teamMember.addDateToWorkSchedule(year, month, date);
+			
 			const teamMembersOnSameTeamYearMonthAndDate = await findTeamMembers(teamMember._id, teamMemberTeam, year, month, date);
+			console.log("🚀 ~ exports.addDateToWorkSchedule= ~ teamMembersOnSameTeamYearMonthAndDate:", teamMembersOnSameTeamYearMonthAndDate)
+			console.log("🚀 ~ exports.addDateToWorkSchedule= ~ teamMembersOnSameTeamYearMonthAndDate:", JSON.stringify(teamMembersOnSameTeamYearMonthAndDate, null, 2))
+
+			const positionCounts = countPositions(teamMembersOnSameTeamYearMonthAndDate);
+			console.log("🚀 ~ positionCounts ~ positionCounts:", positionCounts)
+
 			await handleDailyTotalLogic(teamMembersOnSameTeamYearMonthAndDate, teamMemberPosition);
 
 			teamMember.markModified('workSchedule');
@@ -214,7 +275,7 @@ exports.addDateToWorkSchedule = async (teamMember, dailyTotal) => {
 	}
 };
 
-exports.removeDateFromWorkSchedule = async (teamMember, dailyTotal) => {
+exports.removeDateFromWorkSchedule = async (teamMember, dailyTotal, next) => {
 	try {
 		const teamMemberPosition = teamMember.position.toLowerCase();
         const teamMemberTeam = teamMember.teams;

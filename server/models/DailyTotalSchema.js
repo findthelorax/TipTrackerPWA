@@ -10,7 +10,7 @@ const DailyTotalSchema = new mongoose.Schema({
 	barSales: Number,
 	nonCashTips: Number,
 	cashTips: Number,
-	barTipOuts: Number,
+	bartenderTipOuts: Number,
 	runnerTipOuts: Number,
 	hostTipOuts: Number,
 	potentialTipOuts: {
@@ -39,16 +39,17 @@ const DailyTotalSchema = new mongoose.Schema({
 			return (this.barTipOuts || 0) + (this.runnerTipOuts || 0) + (this.hostTipOuts || 0);
 		},
 	},
-	tipsReceived: {
+	guestTipsReceived: {
 		type: Number,
 		default: function () {
 			return (this.nonCashTips || 0) + (this.cashTips || 0);
 		},
 	},
+	serverTipsReceived: Number,
 	totalPayrollTips: {
 		type: Number,
 		default: function () {
-			return (this.nonCashTips || 0) + (this.cashTips || 0) - (this.totalTipOut || 0);
+			return (this.guestTipsReceived || 0) + (this.serverTipsReceived || 0) - (this.totalTipOut || 0);
 		},
 	},
 });

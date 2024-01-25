@@ -71,12 +71,16 @@ TeamMemberSchema.methods.validateDailyTotal = function (dailyTotal) {
 };
 
 TeamMemberSchema.methods.addDailyTotal = async function (dailyTotal) {
-	// Validate the daily total and get the validated dailyTotal
-	dailyTotal = this.validateDailyTotal(dailyTotal);
+    // Validate the daily total and get the validated dailyTotal
+    dailyTotal = this.validateDailyTotal(dailyTotal);
 
-	this.dailyTotals.push(dailyTotal);
-	this.markModified('dailyTotals');
-    return this.save().then(() => dailyTotal);
+    const updatedTeamMember = await TeamMember.findOneAndUpdate(
+        { _id: this._id },
+        { $push: { dailyTotals: dailyTotal } },
+        { new: true }
+    );
+
+    return updatedTeamMember;
 };
 
 TeamMemberSchema.statics.updateDailyTotal = function (teamMemberId, dailyTotalId, updatedDailyTotal) {
@@ -101,22 +105,27 @@ TeamMemberSchema.methods.removeDailyTotal = function (dailyTotalId) {
 	return this.save();
 };
 
-TeamMemberSchema.methods.addDateToWorkSchedule = function (year, month, date) {
-	let workScheduleItem = this.workSchedule.find((item) => {
-		return item.year === year && item.month === month;
-	});
-	if (workScheduleItem) {
-		workScheduleItem.addDate(date);
-	} else {
-		this.workSchedule.push({
-			year: year,
-			month: month,
-			dates: [date],
-		});
-	}
+TeamMemberSchema.methods.addDateToWorkSchedule = async function (year, month, date) {
+    let workScheduleItem = this.workSchedule.find((item) => {
+        return item.year === year && item.month === month;
+    });
+    if (workScheduleItem) {
+        workScheduleItem.addDate(date);
+    } else {
+        this.workSchedule.push({
+            year: year,
+            month: month,
+            dates: [date],
+        });
+    }
 
-	this.markModified('workSchedule');
-	return this;
+    const updatedTeamMember = await TeamMember.findOneAndUpdate(
+        { _id: this._id },
+        { workSchedule: this.workSchedule },
+        { new: true }
+    );
+
+    return updatedTeamMember;
 };
 
 TeamMemberSchema.methods.removeDateFromWorkSchedule = function (year, month, date) {

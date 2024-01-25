@@ -56,13 +56,13 @@ exports.createDailyTotal = async (req, res, next) => {
 		const { teamMemberId } = req.params;
 		const dailyTotal = req.body;
 
-		const teamMember = await TeamMember.findById(teamMemberId);
+		let teamMember = await TeamMember.findById(teamMemberId);
 		if (!teamMember) {
 			return res.status(404).json({ message: 'Team member not found' });
 		}
 
-		await teamMember.addDailyTotal(dailyTotal);
-		await addDateToWorkSchedule(teamMember, dailyTotal);
+		teamMember = await teamMember.addDailyTotal(dailyTotal);
+		await addDateToWorkSchedule(teamMember, dailyTotal, next);
 
 		res.status(200).json({
 			success: true,

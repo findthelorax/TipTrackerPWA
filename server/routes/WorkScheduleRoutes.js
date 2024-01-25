@@ -2,18 +2,27 @@ const express = require('express');
 const router = express.Router();
 const WorkScheduleController = require('../controllers/TeamMember/WorkScheduleController');
 
-router.get('/teamMembers/allWorkSchedules', WorkScheduleController.getAllWorkSchedules);
+router.route('/teamMembers/allWorkSchedules')
+    .get((req, res, next) => WorkScheduleController.getAllWorkSchedules(req, res, next));
 
-router.get('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.getWorkSchedule);
-router.get('/teamMembers/:teamId/workSchedule', WorkScheduleController.getWorkScheduleByTeam);
-router.get('/teamMembers/:teamMemberId/workSchedule/:year/:month', WorkScheduleController.getWorkScheduleForYearAndMonth);
+router.route('/teamMembers/:teamMemberId/workSchedule')
+    .get((req, res, next) => WorkScheduleController.getWorkSchedule(req, res, next))
+    .post((req, res, next) => WorkScheduleController.createWorkSchedule(req, res, next))
+    .delete((req, res, next) => WorkScheduleController.deleteWorkSchedule(req, res, next))
+    .put((req, res, next) => WorkScheduleController.addDateToWorkSchedule(req, res, next));
 
+router.route('/teamMembers/:teamId/workSchedule')
+    .get((req, res, next) => WorkScheduleController.getWorkScheduleByTeam(req, res, next));
 
-router.post('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.createWorkSchedule);
-router.delete('/teamMembers/:teamMemberId/workSchedule', WorkScheduleController.deleteWorkSchedule);
-router.delete('/teamMembers/:teamMemberId/workSchedule/:year/:month', WorkScheduleController.deleteWorkScheduleForMonth);
+router.route('/teamMembers/:teamMemberId/workSchedule/:year/:month')
+    .get((req, res, next) => WorkScheduleController.getWorkScheduleForYearAndMonth(req, res, next))
+    .delete((req, res, next) => WorkScheduleController.deleteWorkScheduleForMonth(req, res, next));
 
-router.put('/teamMembers/:teamMemberId/workSchedule/addDate', WorkScheduleController.addDateToWorkSchedule);
-router.put('/teamMembers/:teamMemberId/workSchedule/removeDate', WorkScheduleController.removeDateFromWorkSchedule);
+router.route('/teamMembers/:teamMemberId/workSchedule/addDate')
+    .post((req, res, next) => WorkScheduleController.addWorkDate(req, res, next))
+    .put((req, res, next) => WorkScheduleController.addDateToWorkSchedule(req, res, next));
+
+router.route('/teamMembers/:teamMemberId/workSchedule/removeDate')
+    .put((req, res, next) => WorkScheduleController.removeDateFromWorkSchedule(req, res, next));
 
 module.exports = router;

@@ -49,24 +49,34 @@ async function updateTipOuts(date, operation) {
 }
 
 async function updateServersTipOuts(servers, position) {
-    for (let server of servers) {
-        const dailyTotal = server.dailyTotals[0];
-        dailyTotal[`${position}TipOuts`] = dailyTotal.potentialTipOuts[position];
-        await mongoose
-            .model('TeamMember')
-            .updateOne(
-                { _id: server._id, 'dailyTotals.date': dailyTotal.date },
-                { $set: { 'dailyTotals.$': dailyTotal } }
-            );
-    }
+	console.log("🚀 ~ file: teamMemberUtils.js:52 ~ updateServersTipOuts ~ servers:", servers)
+	console.log("🚀 ~ file: teamMemberUtils.js:52 ~ updateServersTipOuts ~ position:", position)
+	for (let server of servers) {
+		const dailyTotal = server.dailyTotals[0];
+		if (dailyTotal.potentialTipOuts) { // Check if potentialTipOuts is not null
+			const tipOut = dailyTotal.potentialTipOuts[position] || 0;
+			dailyTotal[`${position}TipOuts`] = tipOut;
+			// Only calculate totalTipOut for the positions that worked
+			dailyTotal.totalTipOut = Object.keys(dailyTotal.potentialTipOuts)
+				.filter(pos => pos === position)
+				.reduce((total, pos) => total + dailyTotal.potentialTipOuts[pos], 0);
+		}
+		await mongoose
+			.model('TeamMember')
+			.updateOne(
+				{ _id: server._id, 'dailyTotals.date': dailyTotal.date },
+				{ $set: { 'dailyTotals.$': dailyTotal } }
+			);
+	}
 }
 
 async function distributeTips(teamMembers, totalTipOut) {
 	const splitTipOut = totalTipOut / teamMembers.length;
 	for (let teamMember of teamMembers) {
 		const teamMemberDailyTotal = teamMember.dailyTotals[0];
-		teamMemberDailyTotal.tipsReceived += splitTipOut;
-		teamMemberDailyTotal.totalPayrollTips = teamMemberDailyTotal.tipsReceived - teamMemberDailyTotal.totalTipOut;
+		teamMemberDailyTotal.serverTipsReceived = splitTipOut;
+		teamMemberDailyTotal.totalPayrollTips = teamMemberDailyTotal.guestTipsReceived + teamMemberDailyTotal.serverTipsReceived - teamMemberDailyTotal.totalTipOut;
+
 		await mongoose
 			.model('TeamMember')
 			.updateOne(
@@ -75,7 +85,6 @@ async function distributeTips(teamMembers, totalTipOut) {
 			);
 	}
 }
-
 function separateMembersByPosition(teamMembers) {
     const positions = {
         bartender: [],
@@ -104,13 +113,23 @@ async function handlePositionLogic(servers, positionMembers, position) {
 }
 
 async function handleServerAddedLogic(servers, bartenders, runners, hosts) {
-	const totalBartenderTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].bartenderTipOuts || 0), 0);
-	console.log("🚀 ~ file: teamMemberUtils.js:108 ~ handleServerAddedLogic ~ totalBartenderTipOut:", totalBartenderTipOut)
-	const totalRunnerTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].runnerTipOuts || 0), 0);
-	console.log("🚀 ~ file: teamMemberUtils.js:110 ~ handleServerAddedLogic ~ totalRunnerTipOut:", totalRunnerTipOut)
-	const totalHostTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].hostTipOuts || 0), 0);
-	console.log("🚀 ~ file: teamMemberUtils.js:112 ~ handleServerAddedLogic ~ totalHostTipOut:", totalHostTipOut)
+console.log("🚀 ~ file: teamMemberUtils.js:109 ~ handleServerAddedLogic ~ servers:", servers)
 
+	if (bartenders.length > 0) {
+		await updateServersTipOuts(servers, 'bartender');
+	}
+	if (runners.length > 0) {
+		await updateServersTipOuts(servers, 'runner');
+	}
+	if (hosts.length > 0) {
+		await updateServersTipOuts(servers, 'host');
+	}
+
+	const totalBartenderTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].bartenderTipOuts || 0), 0);
+	const totalRunnerTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].runnerTipOuts || 0), 0);
+	const totalHostTipOut = servers.reduce((total, server) => total + (server.dailyTotals[0].hostTipOuts || 0), 0);
+
+	// Distribute tips to each position only once
 	await distributeTips.call(this, bartenders, totalBartenderTipOut);
 	await distributeTips.call(this, runners, totalRunnerTipOut);
 	await distributeTips.call(this, hosts, totalHostTipOut);
@@ -118,15 +137,15 @@ async function handleServerAddedLogic(servers, bartenders, runners, hosts) {
 
 exports.handleDailyTotalLogic = async function (teamMembers) {
 	const positions = separateMembersByPosition(teamMembers);
-	console.log("🚀 ~ positions:", positions)
 
-	for (const position in positions) {
-		if (position === 'server') {
-			await handleServerAddedLogic(positions.server, positions.bartender, positions.runner, positions.host);
-		} else if (['bartender', 'runner', 'host'].includes(position)) {
-			await handlePositionLogic(positions.server, positions[position], position);
-		} else {
-			throw new Error(`Invalid position: ${position}`);
+	if (positions.server.length > 0) {
+		console.log("🚀 ~ position: server")
+		await handleServerAddedLogic(positions.server, positions.bartender, positions.runner, positions.host);
+	} else {
+		for (const position of ['bartender', 'runner', 'host']) {
+			if (positions[position].length > 0) {
+				await handlePositionLogic(positions.server, positions[position], position);
+			}
 		}
 	}
 }
